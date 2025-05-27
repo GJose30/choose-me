@@ -8,7 +8,7 @@ export const NotificationProvider = ({ children }) => {
   const addNotification = (notificationData) => {
     setNotifications((prev) => [
       ...prev,
-      { id: Date.now(), ...notificationData }, // ⬅️ Aquí guardamos todo el objeto
+      { id: Date.now(), ...notificationData },
     ]);
   };
 

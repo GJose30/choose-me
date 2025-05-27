@@ -35,43 +35,6 @@ export function Slider({ images, onHandleDoubleTap }) {
       />
 
       <Pagination item={images} paginationIndex={paginationIndex} />
-
-      {/* <FlatList
-        ref={flatListRef}
-        data={images}
-        keyExtractor={(item, index) => index.toString()}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
-          //   <Pressable className="w-full" onPress={() => {}}>
-          //     <Image
-          //       source={{ uri: item }}
-          //       className={`w-[${width}px] h-[400px] rounded-2xl`}
-          //       resizeMode="cover"
-          //     />
-          //   </Pressable>
-          //   <Pressable className="w-full">
-          <Image
-            source={{ uri: item }}
-            className="mt-2"
-            style={{ width: width, height: 400, borderRadius: 16 }}
-            resizeMode="cover"
-          />
-          //   </Pressable>
-        )}
-        onViewableItemsChanged={onViewRef.current}
-        viewabilityConfig={viewConfigRef.current}
-      />
-
-      <View className="flex-row justify-center mt-2">
-        {images.map((_, idx) => (
-          <View
-            key={idx}
-            className={`h-2 w-2 rounded-full mx-1 ${idx === activeIndex ? "bg-gray-800" : "bg-gray-300"}`}
-          />
-        ))}
-      </View> */}
     </View>
   );
 }

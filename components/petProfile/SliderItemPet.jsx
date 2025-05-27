@@ -1,11 +1,11 @@
 import { Image, View, Dimensions, StyleSheet } from "react-native";
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { LinearGradient } from "expo-linear-gradient";
 
-export function SliderItem({ item }) {
+export function SliderItemPet({ item }) {
   const screenWidth = Dimensions.get("window").width;
-  const horizontalMargin = 16;
-  const itemWidth = screenWidth - horizontalMargin * 2;
+  const screenHeight = Dimensions.get("window").height;
 
   const isVideo = item.tipo === "video";
 
@@ -14,19 +14,12 @@ export function SliderItem({ item }) {
     player.play();
   });
 
-  const { isPlaying } = useEvent(player, "playingChange", {
+  useEvent(player, "playingChange", {
     isPlaying: player.playing,
   });
 
   return (
-    <View
-      style={{
-        width: itemWidth,
-        marginHorizontal: horizontalMargin,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
+    <View style={{ width: screenWidth, height: screenHeight * 0.5 }}>
       {isVideo ? (
         <VideoView
           style={styles.video}
@@ -38,17 +31,23 @@ export function SliderItem({ item }) {
       ) : (
         <Image
           source={{ uri: item.fuente }}
-          className="w-full h-[400px] rounded-2xl"
+          className="w-full h-full"
           resizeMode="cover"
         />
       )}
+
+      {/* Difuminado en la parte superior */}
+      <LinearGradient
+        colors={["rgba(0,0,0,0.5)", "transparent"]}
+        className="absolute top-0 w-full h-24 z-10"
+      />
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   video: {
     width: "100%",
-    height: 400,
-    borderRadius: 16,
+    height: "100%",
   },
 });

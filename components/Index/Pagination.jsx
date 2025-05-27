@@ -1,5 +1,4 @@
 import { View } from "react-native";
-import React from "react";
 
 export function Pagination({ item, paginationIndex }) {
   if (!item || item.length <= 1) return null;

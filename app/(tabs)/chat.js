@@ -25,26 +25,12 @@ const mockChats = [
   },
 ];
 
-export default function ChatList() {
-  // const router = useRouter();
-
-  // const handlePressChat = (chat) => {
-  //   router.push({
-  //     pathname: "/chats/[chatId]",
-  //     params: {
-  //       chatId: chat.id,
-  //       name: chat.name,
-  //       avatar: chat.avatar,
-  //     },
-  //   });
-  // };
-
+export default function Chat() {
   const renderItem = ({ item }) => (
     <Link
       href={{
-        pathname: "indexScreens/message/chatDetail/[id]",
+        pathname: "chatDetail/[id]",
         params: {
-          // chatId: item.id,
           name: item.name,
           avatar: item.avatar,
           time: item.time,
@@ -52,10 +38,7 @@ export default function ChatList() {
       }}
       asChild
     >
-      <Pressable
-        className="flex-row items-center p-4 border-b border-gray-200"
-        // onPress={() => handlePressChat(item)}
-      >
+      <Pressable className="flex-row items-center p-4 border-b border-gray-200">
         <Image
           source={{ uri: item.avatar }}
           className="w-12 h-12 rounded-full mr-4"

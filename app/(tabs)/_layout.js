@@ -1,22 +1,21 @@
 import { Tabs, Link } from "expo-router";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Home,
   Paw,
   SearchIcon,
   Menu,
-  Message,
+  MessageIcon,
   Heart,
+  Plus,
 } from "../../components/Icon";
 import { View, Image, Pressable } from "react-native";
-// import { useNavigation } from "@react-navigation/native";
 import "../../global.css";
 import { SideBarModal } from "../../components/Index/SideBarModal";
 
 export default function TabsLayout() {
   const [sideBarModarVisible, setSideBarModarVisible] = useState(false);
   const DrawerButton = () => {
-    // const navigation = useNavigation();
     return (
       <View>
         <Pressable
@@ -38,17 +37,15 @@ export default function TabsLayout() {
       screenOptions={{
         tabBarActiveTintColor: "white",
         tabBarStyle: {
-          backgroundColor: "#FE9B5C",
+          backgroundColor: "#FF8B41",
           borderTopLeftRadius: 5,
           borderTopRightRadius: 5,
           height: 50,
         },
         tabBarItemStyle: {
           height: 60,
-          // paddingVertical: 5,
         },
         tabBarLabelStyle: {
-          // top: 3,
           fontSize: 10,
         },
       }}
@@ -57,11 +54,11 @@ export default function TabsLayout() {
         name="index"
         options={{
           headerTitle: "",
-          title: "Inicio",
+          title: "",
           headerStyle: { backgroundColor: "white", height: 50 },
           headerLeft: () => <DrawerButton />,
           headerRight: () => (
-            <View className="flex-row gap-5 justify-center items-center">
+            <View className="flex-row gap-5 justify-center items-center mr-4">
               <Link
                 href={{
                   pathname: "/indexScreens/notification",
@@ -74,27 +71,12 @@ export default function TabsLayout() {
               </Link>
               <Link
                 href={{
-                  pathname: "/indexScreens/message/chatList",
+                  pathname: "/indexScreens/search",
                 }}
                 asChild
               >
                 <Pressable>
-                  <Message color={"#374151"} size={24} />
-                </Pressable>
-              </Link>
-              <Link
-                href={{
-                  pathname: "/indexScreens/profile",
-                }}
-                asChild
-              >
-                <Pressable>
-                  <Image
-                    className="h-8 w-8 rounded-full mr-4"
-                    source={{
-                      uri: "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
-                    }}
-                  />
+                  <SearchIcon color={"#374151"} size={24} />
                 </Pressable>
               </Link>
             </View>
@@ -104,12 +86,12 @@ export default function TabsLayout() {
               style={{
                 alignItems: "center",
                 justifyContent: "center",
-                // top: 3,
+                top: 4,
                 height: 38,
                 width: 38,
               }}
             >
-              <Home color={color} size={24} />
+              <Home color={"white"} size={24} />
             </View>
           ),
         }}
@@ -117,41 +99,87 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="adoption"
         options={{
-          headerTitle: "Adopcion",
-          title: "Adopcion",
+          headerTitle: "",
+          title: "",
           headerStyle: { backgroundColor: "#FE9B5C" },
           tabBarIcon: ({ color }) => (
             <View
               style={{
                 alignItems: "center",
                 justifyContent: "center",
-                // top: 3,
+                top: 4,
                 height: 38,
                 width: 38,
               }}
             >
-              <Paw color={color} size={24} />
+              <Paw color={"white"} size={24} />
             </View>
           ),
         }}
       />
       <Tabs.Screen
-        name="search"
+        name="post"
         options={{
-          headerTitle: "Buscar",
-          title: "Buscar",
+          headerTitle: "",
+          title: "",
           headerStyle: { backgroundColor: "#FE9B5C" },
           tabBarIcon: ({ color }) => (
             <View
               style={{
                 alignItems: "center",
                 justifyContent: "center",
-                // top: 3,
+                top: 4,
+                height: 50,
+                width: 50,
+              }}
+            >
+              <Plus color={"white"} size={37} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          headerTitle: "",
+          title: "",
+          headerStyle: { backgroundColor: "#FE9B5C" },
+          tabBarIcon: ({ color }) => (
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                top: 4,
                 height: 38,
                 width: 38,
               }}
             >
-              <SearchIcon color={color} size={24} />
+              <MessageIcon color={"white"} size={24} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          headerTitle: "",
+          title: "",
+          tabBarIcon: ({ color }) => (
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                top: 4,
+                height: 38,
+                width: 38,
+              }}
+            >
+              <Image
+                className="h-8 w-8 rounded-full"
+                source={{
+                  uri: "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
+                }}
+              />
             </View>
           ),
         }}

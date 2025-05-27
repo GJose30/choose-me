@@ -1,6 +1,5 @@
 import { Tabs } from "expo-router";
-import React from "react";
-import { Home, Menu, Message } from "../../../components/Icon";
+import { Home, Menu, MessageIcon } from "../../../components/Icon";
 import { View, Image, Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import "../../../global.css";
@@ -49,7 +48,7 @@ export default function TabsLayout() {
           headerLeft: () => <DrawerButton />,
           headerRight: () => (
             <View className="flex-row gap-6 justify-center items-center">
-              <Message color={"#374151"} size={34} />
+              <MessageIcon color={"#374151"} size={34} />
               <Image
                 className="h-12 w-12 rounded-full mr-4"
                 source={{

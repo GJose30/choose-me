@@ -7,26 +7,39 @@ import {
   TouchableWithoutFeedback,
   Pressable,
   Image,
-  ScrollView,
   Animated,
 } from "react-native";
 import { useEffect, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Home, Calendar, Settings, Group, Newspaper, LogOut } from "../Icon";
+import {
+  Home,
+  Calendar,
+  Settings,
+  Group,
+  Newspaper,
+  LogOut,
+  Market,
+} from "../Icon";
+import { Link } from "expo-router";
 
 export function SideBarModal({ visible, onClose }) {
   const slideAnim = useRef(new Animated.Value(-300)).current;
 
+  const cerrarModalConAnimacion = () => {
+    Animated.timing(slideAnim, {
+      toValue: -300,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+    });
+  };
+
   useEffect(() => {
     if (visible) {
+      slideAnim.setValue(-300);
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: -300,
         duration: 300,
         useNativeDriver: false,
       }).start();
@@ -38,29 +51,37 @@ export function SideBarModal({ visible, onClose }) {
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={cerrarModalConAnimacion}
       statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View className="flex-1 bg-black/40 flex-row">
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <Animated.View
-                style={{
-                  transform: [{ translateX: slideAnim }],
-                }}
-                className="w-2/3"
-              >
-                <SafeAreaView className="flex-1 ">
+        <SafeAreaView className="flex-1">
+          <TouchableWithoutFeedback onPress={cerrarModalConAnimacion}>
+            <View className="flex-1 bg-black/20 flex-row">
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <Animated.View
+                  style={{
+                    transform: [{ translateX: slideAnim }],
+                  }}
+                  className="w-2/3"
+                >
                   <View className="flex-1 bg-white">
                     {/* Contenido del sidebar */}
                     <View className="flex-1 px-3 pt-7">
-                      <ScrollView showsVerticalScrollIndicator={false}>
-                        {/* Perfil */}
-                        <View className="flex-row items-center mb-4 px-3">
+                      {/* Perfil */}
+                      <Link
+                        href={{
+                          pathname: "(tabs)/profile",
+                        }}
+                        asChild
+                      >
+                        <Pressable
+                          className="flex-row items-center mb-4 px-3"
+                          onPress={onClose}
+                        >
                           <Image
                             source={{
                               uri: "https://randomuser.me/api/portraits/men/32.jpg",
@@ -75,11 +96,18 @@ export function SideBarModal({ visible, onClose }) {
                               Ver perfil
                             </Text>
                           </View>
-                        </View>
+                        </Pressable>
+                      </Link>
 
-                        {/* Menú de navegación */}
-                        <View className="gap-2">
-                          <Pressable>
+                      {/* Menú de navegación */}
+                      <View className="gap-2">
+                        <Link
+                          href={{
+                            pathname: "(tabs)",
+                          }}
+                          asChild
+                        >
+                          <Pressable onPress={onClose}>
                             {({ pressed }) => (
                               <View
                                 className={`rounded-md flex-row items-center p-3 ${pressed ? "bg-gray-200" : ""}`}
@@ -91,7 +119,33 @@ export function SideBarModal({ visible, onClose }) {
                               </View>
                             )}
                           </Pressable>
-                          <Pressable>
+                        </Link>
+                        <Link
+                          href={{
+                            pathname: "Sidebar/market/index",
+                          }}
+                          asChild
+                        >
+                          <Pressable onPress={onClose}>
+                            {({ pressed }) => (
+                              <View
+                                className={`rounded-md flex-row items-center p-3 ${pressed ? "bg-gray-200" : ""}`}
+                              >
+                                <Market size={21} color="#4b5563" />
+                                <Text className="text-gray-600 text-lg font-semibold ml-2">
+                                  Tienda
+                                </Text>
+                              </View>
+                            )}
+                          </Pressable>
+                        </Link>
+                        <Link
+                          href={{
+                            pathname: "Sidebar/events/index",
+                          }}
+                          asChild
+                        >
+                          <Pressable onPress={onClose}>
                             {({ pressed }) => (
                               <View
                                 className={`rounded-md flex-row items-center p-3 ${pressed ? "bg-gray-200" : ""}`}
@@ -103,7 +157,14 @@ export function SideBarModal({ visible, onClose }) {
                               </View>
                             )}
                           </Pressable>
-                          <Pressable>
+                        </Link>
+                        <Link
+                          href={{
+                            pathname: "Sidebar/groups/index",
+                          }}
+                          asChild
+                        >
+                          <Pressable onPress={onClose}>
                             {({ pressed }) => (
                               <View
                                 className={`rounded-md flex-row items-center p-3 ${pressed ? "bg-gray-200" : ""}`}
@@ -115,7 +176,14 @@ export function SideBarModal({ visible, onClose }) {
                               </View>
                             )}
                           </Pressable>
-                          <Pressable>
+                        </Link>
+                        <Link
+                          href={{
+                            pathname: "Sidebar/news/index",
+                          }}
+                          asChild
+                        >
+                          <Pressable onPress={onClose}>
                             {({ pressed }) => (
                               <View
                                 className={`rounded-md flex-row items-center p-3 ${pressed ? "bg-gray-200" : ""}`}
@@ -127,7 +195,14 @@ export function SideBarModal({ visible, onClose }) {
                               </View>
                             )}
                           </Pressable>
-                          <Pressable>
+                        </Link>
+                        <Link
+                          href={{
+                            pathname: "Sidebar/configuration/index",
+                          }}
+                          asChild
+                        >
+                          <Pressable onPress={onClose}>
                             {({ pressed }) => (
                               <View
                                 className={`rounded-md flex-row items-center p-3 ${pressed ? "bg-gray-200" : ""}`}
@@ -139,14 +214,14 @@ export function SideBarModal({ visible, onClose }) {
                               </View>
                             )}
                           </Pressable>
-                        </View>
-                      </ScrollView>
+                        </Link>
+                      </View>
                     </View>
 
                     {/* Botón de Cerrar sesión al fondo */}
                     <View className="px-6 mb-8">
                       <Pressable
-                        onPress={onClose}
+                        onPress={cerrarModalConAnimacion}
                         className="flex-row items-center"
                       >
                         <LogOut size={21} color="#4b5563" />
@@ -156,16 +231,11 @@ export function SideBarModal({ visible, onClose }) {
                       </Pressable>
                     </View>
                   </View>
-                </SafeAreaView>
-              </Animated.View>
-            </TouchableWithoutFeedback>
-
-            {/* Parte oscura que cierra */}
-            <TouchableWithoutFeedback onPress={onClose}>
-              <View className="flex-1" />
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+                </Animated.View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );

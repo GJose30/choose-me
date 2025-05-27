@@ -25,7 +25,7 @@ export const Menu = (props) => (
   <Feather name="menu" size={24} color="black" {...props} />
 );
 
-export const Message = (props) => (
+export const MessageIcon = (props) => (
   <AntDesign name="message1" size={24} color="black" {...props} />
 );
 
@@ -80,4 +80,12 @@ export const ArrowLeft = (props) => (
 
 export const LogOut = (props) => (
   <Feather name="log-out" size={24} color="black" {...props} />
+);
+
+export const Plus = (props) => (
+  <Feather name="plus" size={24} color="black" {...props} />
+);
+
+export const Market = (props) => (
+  <Ionicons name="storefront-outline" size={24} color="black" {...props} />
 );

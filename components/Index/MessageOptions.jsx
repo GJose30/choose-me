@@ -5,7 +5,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
+  Animated,
 } from "react-native";
+import { useEffect, useRef } from "react";
 
 export function MessageOptions({
   visible,
@@ -14,26 +16,55 @@ export function MessageOptions({
   onDelete,
   onReport,
 }) {
+  const slideAnim = useRef(new Animated.Value(300)).current;
+
+  const cerrarModalConAnimacion = () => {
+    Animated.timing(slideAnim, {
+      toValue: 300,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+    });
+  };
+
+  useEffect(() => {
+    if (visible) {
+      slideAnim.setValue(300);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={cerrarModalConAnimacion}
+      statusBarTranslucent={true}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View className="flex-1 bg-black/40 justify-end">
+        <TouchableWithoutFeedback onPress={cerrarModalConAnimacion}>
+          <View className="flex-1 bg-black/20 justify-end">
             <TouchableWithoutFeedback onPress={() => {}}>
-              <View className="bg-white rounded-t-2xl p-4">
+              <Animated.View
+                style={{
+                  transform: [{ translateY: slideAnim }],
+                }}
+                className="bg-white rounded-t-2xl p-4"
+              >
                 <Text
                   className="text-gray-800 text-center py-3 text-base font-semibold"
                   onPress={() => {
                     onDelete(selectedCommentIndex);
-                    onClose();
+                    cerrarModalConAnimacion();
                   }}
                 >
                   Eliminar
@@ -42,18 +73,17 @@ export function MessageOptions({
                   className="text-red-600 text-center py-3 text-base font-semibold"
                   onPress={() => {
                     onReport(selectedCommentIndex);
-                    onClose();
                   }}
                 >
                   Reportar Comentario
                 </Text>
                 <Text
                   className="text-gray-500 text-center py-3 text-base font-semibold"
-                  onPress={onClose}
+                  onPress={cerrarModalConAnimacion}
                 >
                   Cancelar
                 </Text>
-              </View>
+              </Animated.View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>

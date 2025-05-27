@@ -9,7 +9,9 @@ import {
   Image,
   FlatList,
   ScrollView,
+  Animated,
 } from "react-native";
+import { useEffect, useRef } from "react";
 
 const mockUsers = [
   { id: 1, name: "Gil Arauz", avatar: "https://i.pravatar.cc/100?img=1" },
@@ -41,22 +43,50 @@ const socialNetworks = [
 ];
 
 export function PetShareModal({ visible, onClose }) {
+  const slideAnim = useRef(new Animated.Value(300)).current;
+
+  const cerrarModalConAnimacion = () => {
+    Animated.timing(slideAnim, {
+      toValue: 600,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+    });
+  };
+
+  useEffect(() => {
+    if (visible) {
+      slideAnim.setValue(300);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={cerrarModalConAnimacion}
       statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1 justify-end"
       >
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View className="flex-1 bg-black/40 justify-end">
+        <TouchableWithoutFeedback onPress={cerrarModalConAnimacion}>
+          <View className="flex-1 bg-black/20 justify-end">
             <TouchableWithoutFeedback onPress={() => {}}>
-              <View className="bg-white rounded-t-3xl p-6 pb-10 w-full">
+              <Animated.View
+                style={{
+                  transform: [{ translateY: slideAnim }],
+                }}
+                className="bg-white rounded-t-3xl p-6 pb-10 w-full"
+              >
                 {/* Título */}
                 <Text className="text-center text-lg font-bold mb-6 text-gray-800">
                   Compartir publicación
@@ -116,13 +146,13 @@ export function PetShareModal({ visible, onClose }) {
                 {/* Cancelar */}
                 <Pressable
                   className="mt-8 w-full py-4 bg-gray-200 rounded-full items-center"
-                  onPress={onClose}
+                  onPress={cerrarModalConAnimacion}
                 >
                   <Text className="text-gray-600 font-semibold text-base">
                     Cancelar
                   </Text>
                 </Pressable>
-              </View>
+              </Animated.View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>

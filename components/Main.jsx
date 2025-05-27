@@ -3,7 +3,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PostItem } from "./Index/PostItem";
 import { Screen } from "./Screen";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 const Post = [
   {

@@ -1,23 +1,22 @@
-import { Text, View, Image, Pressable, FlatList } from "react-native";
-import { Dots, Heart, Message, Bookmark } from "../Icon";
-import { useState, useRef, useEffect } from "react";
-import { MessageModal } from "../Index/MessageModal";
+import { Text, View, Image, Pressable } from "react-native";
+import { Dots, Heart, MessageIcon, Bookmark } from "../Icon";
+import { useState, useRef } from "react";
 import { PostModal } from "./PostModal";
-import { Link } from "expo-router";
-import { useNotifications } from "../../contexts/NotificationContext"; // ajustar ruta
+import { useRouter } from "expo-router";
+import { useNotifications } from "../../contexts/NotificationContext";
 import { Slider } from "./Slider";
 
 export function PostItem({ data, index, onHidePost, onReportPost }) {
+  const router = useRouter();
   const [liked, setLiked] = useState(false);
   const lastTap = useRef(null);
   const [likeCount, setLikeCount] = useState(0);
   const [commentCount, setCommentCount] = useState(0);
-  const [messageVisible, setMessageVisible] = useState(false);
   const [postModalVisible, setPostModalVisible] = useState(false);
   const [bookmark, setBookmark] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showVerMas, setShowVerMas] = useState(false);
-  const { addNotification } = useNotifications(); // usar contexto
+  const { addNotification } = useNotifications();
 
   const handleDoubleTap = () => {
     const now = Date.now();
@@ -28,8 +27,8 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           nombre: data.nombre,
           imagen: data.imagen,
           logo: data.logo,
-          tipo: "like", // 🔥 puedes agregarle tipo de notificación
-          fecha: new Date().toISOString(), // 🔥 puedes agregarle fecha también
+          tipo: "like",
+          fecha: new Date().toISOString(),
         });
       }
       setLiked((prev) => {
@@ -42,9 +41,6 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
   };
 
   const handleOneTapLike = () => {
-    // if (!liked) {
-    //   addNotification(`Te ha gustado la publicación de ${data.nombre}`);
-    // }
     if (!liked) {
       addNotification({
         title: `Te ha gustado la publicación de ${data.nombre}`,
@@ -67,58 +63,39 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
     setShowVerMas(e.nativeEvent.lines.length > 2);
   };
 
-  // const imagesArray = Array.isArray(data.media) ? data.media : [data.media];
   const imagesArray = Array.isArray(data?.media)
     ? data.media.filter((item) => item && item.fuente)
     : data?.media?.fuente
       ? [{ tipo: data.media.tipo, fuente: data.media.fuente }]
       : [];
 
-  // if (!data || !data.media) {
-  //   console.warn("No hay media disponible para esta publicación:", data);
-  //   return null; // o return []
-
-  // const imagesArray = [];
-
-  // if (Array.isArray(data.imagen)) {
-  //   imagesArray.push(...data.imagen);
-  // } else if (typeof data.imagen === "string" && data.imagen.trim() !== "") {
-  //   imagesArray.push(data.imagen);
-  // }
-
-  // useEffect(() => {
-  //   console.log(data.media);
-  // }, []);
-
   return (
     <View className="my-4">
       <View className="flex-row items-center mx-4">
-        <Link
-          href={{
-            pathname: "indexScreens/petProfile/[id]",
-            params: {
-              index: index,
-              nombre: data.nombre,
-              descripcion: data.descripcion,
-              imagen: data.imagen,
-              logo: data.logo,
-            },
-          }}
-          asChild
+        <Pressable
+          className="flex-row gap-2 justify-center items-center"
+          onPress={() =>
+            router.push({
+              pathname: "indexScreens/petProfile/[id]",
+              params: {
+                index: index,
+                nombre: data.nombre,
+                descripcion: data.descripcion,
+                imagen: data.imagen,
+                logo: data.logo,
+              },
+            })
+          }
         >
-          <Pressable className="flex-row gap-2 justify-center items-center">
-            <View>
-              <Image
-                className="w-10 h-10 rounded-full"
-                source={{ uri: `${data.logo}` }}
-              />
-            </View>
-            <View className="flex-col">
-              <Text className="text-gray-700 font-medium">{data.nombre}</Text>
-              <Text className="text-gray-400 font-normal">Hace 5 dias</Text>
-            </View>
-          </Pressable>
-        </Link>
+          <Image
+            className="w-10 h-10 rounded-full"
+            source={{ uri: `${data.logo}` }}
+          />
+          <View className="flex-col">
+            <Text className="text-gray-700 font-medium">{data.nombre}</Text>
+            <Text className="text-gray-400 font-normal">Hace 5 dias</Text>
+          </View>
+        </Pressable>
         <Pressable
           className="ml-auto"
           onPress={() => {
@@ -142,30 +119,7 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           onHandleDoubleTap={() => handleDoubleTap()}
         />
       </View>
-      {/* <Pressable className="mt-2" onPress={handleDoubleTap}>
-        <Image
-          className="w-full h-[400px] rounded-2xl"
-          source={{ uri: `${data.imagen}` }}
-        />
-      </Pressable> */}
-      {/* <FlatList
-        ref={flatListRef}
-        data={imagesArray}
-        keyExtractor={(item, index) => index.toString()}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <Pressable className="w-full" onPress={handleDoubleTap}>
-            <Image
-              source={{ uri: item }}
-              className="w-[400px] h-[400px] rounded-2xl"
-              resizeMode="cover"
-            />
-          </Pressable>
-        )}
-      /> */}
-      <View className="flex-row gap-4 mt-2 mx-4">
+      <View className="flex-row gap-3 mt-2 mx-4">
         <Pressable
           onPress={handleOneTapLike}
           className="flex-row gap-1 items-center"
@@ -174,25 +128,27 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           <Text className="text-gray-600 font-medium text-lg">{likeCount}</Text>
         </Pressable>
         <Pressable
-          onPress={() => setMessageVisible(true)}
-          className="flex-row gap-1 items-center"
+          className="flex-row gap-2 justify-center items-center"
+          onPress={() =>
+            router.push({
+              pathname: "indexScreens/message",
+              params: {
+                index: index,
+              },
+            })
+          }
         >
-          <Message color={"#374151"} size={24} />
+          <MessageIcon color={"#374151"} size={24} />
           <Text className="text-gray-600 font-medium text-lg">
             {commentCount}
           </Text>
         </Pressable>
-        {/* Modal del mensage */}
-        <MessageModal
-          visible={messageVisible}
-          onClose={() => setMessageVisible(false)}
-          onCommentsChange={(count) => setCommentCount(count)}
-        />
+
         <Pressable onPress={handleOneTapBookmark} className="ml-auto">
           <Bookmark color={bookmark ? "orange" : "#374151"} size={24} />
         </Pressable>
       </View>
-      <View className="mt-2 mx-4">
+      <Pressable onPress={() => setExpanded(!expanded)} className="mt-2 mx-4">
         <Text
           numberOfLines={expanded ? undefined : 2}
           onTextLayout={onTextLayout}
@@ -201,13 +157,11 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           {data.descripcion}
         </Text>
         {showVerMas && (
-          <Pressable onPress={() => setExpanded(!expanded)}>
-            <Text className="text-gray-500 font-light">
-              {expanded ? "Ver menos" : "Ver más..."}
-            </Text>
-          </Pressable>
+          <Text className="text-gray-500 font-light">
+            {expanded ? "Ver menos" : "Ver más..."}
+          </Text>
         )}
-      </View>
+      </Pressable>
     </View>
   );
 }

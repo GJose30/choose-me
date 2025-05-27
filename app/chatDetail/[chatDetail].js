@@ -36,21 +36,20 @@ export default function ChatDetail() {
       <Stack.Screen
         options={{
           headerStyle: { backgroundColor: "white" },
-          // headerTitle: "", // dejamos vacío para controlar manualmente
-          // header
           headerTitle: () => (
             <View className="flex-row items-center">
               <Image
-                source={{ uri: avatar }}
+                source={{ uri: avatar || "https://via.placeholder.com/40" }}
                 className="w-10 h-10 rounded-full mr-2"
               />
               <Text className="text-gray-800 font-semibold text-lg">
-                {name}
+                {name || "Usuario"}
               </Text>
             </View>
           ),
         }}
       />
+
       <View className="flex-1 p-4">
         <FlatList
           data={messages}
@@ -70,7 +69,7 @@ export default function ChatDetail() {
               </View>
             </View>
           )}
-          inverted // Para que los últimos mensajes estén abajo
+          inverted
         />
       </View>
 
