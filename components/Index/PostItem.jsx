@@ -1,10 +1,26 @@
 import { Text, View, Image, Pressable } from "react-native";
 import { Dots, Heart, MessageIcon, Bookmark } from "../Icon";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PostModal } from "./PostModal";
 import { useRouter } from "expo-router";
 import { useNotifications } from "../../contexts/NotificationContext";
 import { Slider } from "./Slider";
+import { supabase } from "../../lib/supabase";
+
+function tiempoTranscurrido(fechaISO) {
+  const fecha = new Date(fechaISO);
+  const ahora = new Date();
+  const segundos = Math.floor((ahora - fecha) / 1000);
+
+  const minutos = Math.floor(segundos / 60);
+  const horas = Math.floor(minutos / 60);
+  const dias = Math.floor(horas / 24);
+
+  if (segundos < 60) return "Hace unos segundos";
+  if (minutos < 60) return `Hace ${minutos} minuto${minutos > 1 ? "s" : ""}`;
+  if (horas < 24) return `Hace ${horas} hora${horas > 1 ? "s" : ""}`;
+  return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
+}
 
 export function PostItem({ data, index, onHidePost, onReportPost }) {
   const router = useRouter();
@@ -17,6 +33,7 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
   const [expanded, setExpanded] = useState(false);
   const [showVerMas, setShowVerMas] = useState(false);
   const { addNotification } = useNotifications();
+  const [posts, setPosts] = useState([]);
 
   const handleDoubleTap = () => {
     const now = Date.now();
@@ -63,11 +80,30 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
     setShowVerMas(e.nativeEvent.lines.length > 2);
   };
 
-  const imagesArray = Array.isArray(data?.media)
-    ? data.media.filter((item) => item && item.fuente)
-    : data?.media?.fuente
-      ? [{ tipo: data.media.tipo, fuente: data.media.fuente }]
-      : [];
+  const imagesArray = Array.isArray(data.post)
+    ? data.post.flatMap((post) =>
+        Array.isArray(post.media)
+          ? post.media
+              .filter((item) => !!item.fuente)
+              .map((item) => ({
+                tipo: item.tipo,
+                fuente: item.fuente,
+              }))
+          : []
+      )
+    : [];
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      const { data, error } = await supabase.from("post").select("*");
+      if (error) console.log(error);
+      else {
+        setPosts(data);
+      }
+    };
+    fetchPosts();
+    console.log(index);
+  }, []);
 
   return (
     <View className="my-4">
@@ -79,10 +115,10 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
               pathname: "indexScreens/petProfile/[id]",
               params: {
                 index: index,
-                nombre: data.nombre,
-                descripcion: data.descripcion,
-                imagen: data.imagen,
-                logo: data.logo,
+                // nombre: data.nombre,
+                // descripcion: data.descripcion,
+                // imagen: data.imagen,
+                // logo: data.logo,
               },
             })
           }
@@ -93,7 +129,10 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           />
           <View className="flex-col">
             <Text className="text-gray-700 font-medium">{data.nombre}</Text>
-            <Text className="text-gray-400 font-normal">Hace 5 dias</Text>
+            {/* <Text className="text-gray-400 font-normal">Hace 5 dias</Text> */}
+            <Text className="text-gray-400 font-normal">
+              {tiempoTranscurrido(data.post[0].created_at)}
+            </Text>
           </View>
         </Pressable>
         <Pressable

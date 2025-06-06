@@ -122,7 +122,7 @@ export function SideBarModal({ visible, onClose }) {
                         </Link>
                         <Link
                           href={{
-                            pathname: "Sidebar/market/index",
+                            pathname: "Sidebar/market",
                           }}
                           asChild
                         >
@@ -141,7 +141,7 @@ export function SideBarModal({ visible, onClose }) {
                         </Link>
                         <Link
                           href={{
-                            pathname: "Sidebar/events/index",
+                            pathname: "Sidebar/events",
                           }}
                           asChild
                         >
@@ -160,7 +160,7 @@ export function SideBarModal({ visible, onClose }) {
                         </Link>
                         <Link
                           href={{
-                            pathname: "Sidebar/groups/index",
+                            pathname: "Sidebar/groups",
                           }}
                           asChild
                         >
@@ -179,7 +179,7 @@ export function SideBarModal({ visible, onClose }) {
                         </Link>
                         <Link
                           href={{
-                            pathname: "Sidebar/news/index",
+                            pathname: "Sidebar/news",
                           }}
                           asChild
                         >
@@ -198,7 +198,7 @@ export function SideBarModal({ visible, onClose }) {
                         </Link>
                         <Link
                           href={{
-                            pathname: "Sidebar/configuration/index",
+                            pathname: "Sidebar/configuration",
                           }}
                           asChild
                         >

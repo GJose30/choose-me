@@ -6,7 +6,7 @@ import {
   FlatList,
   ScrollView,
 } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import {
   Share,
@@ -20,6 +20,7 @@ import {
 import { PetProfileModal } from "../../../components/petProfile/PetProfileModal";
 import { PetShareModal } from "../../../components/petProfile/PetShareModal";
 import { SliderPet } from "../../../components/petProfile/SliderPet";
+import { supabase } from "../../../lib/supabase";
 
 const Qualities = [
   {
@@ -123,12 +124,13 @@ const Post = [
 ];
 
 export default function PetProfile() {
-  const router = useRouter();
   const { index, nombre, descripcion, imagen, logo, modal } =
     useLocalSearchParams();
+  const router = useRouter();
   const [petProfileModalVisible, setPetProfileModalVisible] = useState(false);
   const [petShareModalVisible, setPetShareModalVisible] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [pet, setPet] = useState(false);
   const postData = Post[index];
 
   const onReportPost = () => {
@@ -142,6 +144,23 @@ export default function PetProfile() {
     : postData?.media?.fuente
       ? [{ tipo: postData.media.tipo, fuente: postData.media.fuente }]
       : [];
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      const { data, error } = await supabase.from("pet").select(`
+        *,
+        qualities (
+          *
+        )
+      `);
+      if (error) console.log(error);
+      else {
+        setPet(data);
+      }
+    };
+    fetchPosts();
+    console.log(pet);
+  }, []);
 
   return (
     <View className="flex-1">
@@ -203,8 +222,8 @@ export default function PetProfile() {
 
         <View className="pt-5 pb-7">
           <FlatList
-            data={Qualities}
-            keyExtractor={(item) => item.titulo}
+            data={pet.qualities}
+            keyExtractor={(item) => item.id}
             horizontal
             showsHorizontalScrollIndicator={false}
             renderItem={({ item }) => (
