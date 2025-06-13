@@ -7,9 +7,9 @@ export function SliderItem({ item }) {
   const horizontalMargin = 16;
   const itemWidth = screenWidth - horizontalMargin * 2;
 
-  const isVideo = item.tipo === "video";
+  const isVideo = item.type === "video";
 
-  const player = useVideoPlayer(item.fuente, (player) => {
+  const player = useVideoPlayer(item.source, (player) => {
     player.loop = true;
     player.play();
   });
@@ -37,7 +37,7 @@ export function SliderItem({ item }) {
         />
       ) : (
         <Image
-          source={{ uri: item.fuente }}
+          source={{ uri: item.source }}
           className="w-full h-[400px] rounded-2xl"
           resizeMode="cover"
         />

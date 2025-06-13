@@ -212,7 +212,7 @@ export default function Profile() {
           <View>
             <Link
               href={{
-                pathname: "indexScreens/message",
+                pathname: "indexScreens/comment",
                 params: {
                   index: index,
                 },

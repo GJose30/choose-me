@@ -134,13 +134,14 @@ export function Main() {
         <Screen>
           <FlatList
             data={posts}
-            keyExtractor={(index) => index.id}
+            keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             onRefresh={handleRefresh}
             refreshing={refreshing}
             renderItem={({ item, index }) => (
               <PostItem
                 data={item}
+                id={item.id}
                 index={index}
                 onHidePost={(i) => {
                   const updated = [...posts];

@@ -22,7 +22,7 @@ function tiempoTranscurrido(fechaISO) {
   return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
 }
 
-export function PostItem({ data, index, onHidePost, onReportPost }) {
+export function PostItem({ data, id, index, onHidePost, onReportPost }) {
   const router = useRouter();
   const [liked, setLiked] = useState(false);
   const lastTap = useRef(null);
@@ -40,8 +40,8 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
     if (lastTap.current && now - lastTap.current < 300) {
       if (!liked) {
         addNotification({
-          title: `Te ha gustado la publicación de ${data.nombre}`,
-          nombre: data.nombre,
+          title: `Te ha gustado la publicación de ${data.name}`,
+          nombre: data.name,
           imagen: data.imagen,
           logo: data.logo,
           tipo: "like",
@@ -60,8 +60,8 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
   const handleOneTapLike = () => {
     if (!liked) {
       addNotification({
-        title: `Te ha gustado la publicación de ${data.nombre}`,
-        nombre: data.nombre,
+        title: `Te ha gustado la publicación de ${data.name}`,
+        nombre: data.name,
         imagen: data.imagen,
         logo: data.logo,
         tipo: "like",
@@ -84,10 +84,10 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
     ? data.post.flatMap((post) =>
         Array.isArray(post.media)
           ? post.media
-              .filter((item) => !!item.fuente)
+              .filter((item) => !!item.source)
               .map((item) => ({
-                tipo: item.tipo,
-                fuente: item.fuente,
+                type: item.type,
+                source: item.source,
               }))
           : []
       )
@@ -102,7 +102,6 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
       }
     };
     fetchPosts();
-    console.log(index);
   }, []);
 
   return (
@@ -115,8 +114,10 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
               pathname: "indexScreens/petProfile/[id]",
               params: {
                 index: index,
-                // nombre: data.nombre,
-                // descripcion: data.descripcion,
+                nombre: data.name,
+                descripcion: data.description,
+                ubicacion: data.location,
+                pet_id: id,
                 // imagen: data.imagen,
                 // logo: data.logo,
               },
@@ -128,7 +129,7 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
             source={{ uri: `${data.logo}` }}
           />
           <View className="flex-col">
-            <Text className="text-gray-700 font-medium">{data.nombre}</Text>
+            <Text className="text-gray-700 font-medium">{data.name}</Text>
             {/* <Text className="text-gray-400 font-normal">Hace 5 dias</Text> */}
             <Text className="text-gray-400 font-normal">
               {tiempoTranscurrido(data.post[0].created_at)}
@@ -170,9 +171,15 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           className="flex-row gap-2 justify-center items-center"
           onPress={() =>
             router.push({
-              pathname: "indexScreens/message",
+              pathname: "indexScreens/comment",
               params: {
                 index: index,
+                nombre: data.name,
+                descripcion: data.description,
+                ubicacion: data.location,
+                pet_id: id,
+                // created_at: data.created_at,
+                logo: data.logo,
               },
             })
           }
@@ -193,7 +200,7 @@ export function PostItem({ data, index, onHidePost, onReportPost }) {
           onTextLayout={onTextLayout}
           className="text-gray-800"
         >
-          {data.descripcion}
+          {data.description}
         </Text>
         {showVerMas && (
           <Text className="text-gray-500 font-light">

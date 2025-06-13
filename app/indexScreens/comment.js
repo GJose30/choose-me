@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,89 +13,28 @@ import { Slider } from "../../components/Index/Slider";
 import { PostModal } from "../../components/Index/PostModal";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { useNotifications } from "../../contexts/NotificationContext";
+import { supabase } from "../../lib/supabase";
 
-const Post = [
-  {
-    nombre: "Buster Hernandez",
-    descripcion:
-      "Rocky es un amor de perrito, lleno de energía y con ganas de llenar de alegría el hogar que le dé una oportunidad. Rocky es un amor de perrito, lleno de energía y con ganas de llenar de alegría el hogar que le dé una oportunidad.",
-    logo: "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
-    media: [
-      {
-        tipo: "image",
-        fuente:
-          "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
-      },
-      {
-        tipo: "image",
-        fuente:
-          "https://images.ctfassets.net/denf86kkcx7r/76LfU7b9ixCa7W2Wj579AZ/9b80697718ff08853ad7388e08c4bfd6/shutterstock_2502183265.jpg?fm=webp&w=550",
-      },
-      {
-        tipo: "video",
-        fuente:
-          "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      },
-    ],
-  },
-  {
-    nombre: "Kitty Garcia",
-    descripcion:
-      "Rocky es un amor de perrito, lleno de energía y con ganas de llenar de alegría el hogar que le dé una oportunidad.",
-    logo: "https://urgenciesveterinaries.com/wp-content/uploads/2023/09/survet-gato-caida-pelo-01.jpeg",
-    media: [
-      {
-        tipo: "image",
-        fuente:
-          "https://urgenciesveterinaries.com/wp-content/uploads/2023/09/survet-gato-caida-pelo-01.jpeg",
-      },
-    ],
-  },
-  {
-    nombre: "Leo Panthera",
-    descripcion:
-      "Rocky es un amor de perrito, lleno de energía y con ganas de llenar de alegría el hogar que le dé una oportunidad.",
-    logo: "https://purina.com.pa/sites/default/files/2022-11/purina-brand-cuanto-vive-un-gato-nota_03.jpg",
-    media: [
-      {
-        tipo: "image",
-        fuente:
-          "https://purina.com.pa/sites/default/files/2022-11/purina-brand-cuanto-vive-un-gato-nota_03.jpg",
-      },
-    ],
-  },
-  {
-    nombre: "Charly Anthonio",
-    descripcion:
-      "Rocky es un amor de perrito, lleno de energía y con ganas de llenar de alegría el hogar que le dé una oportunidad.",
-    logo: "https://okdiario.com/img/2025/04/08/el-significado-de-que-tu-perro-te-chupe-los-pies-sin-parar-635x358.jpg",
-    media: [
-      {
-        tipo: "image",
-        fuente:
-          "https://okdiario.com/img/2025/04/08/el-significado-de-que-tu-perro-te-chupe-los-pies-sin-parar-635x358.jpg",
-      },
-    ],
-  },
-  {
-    nombre: "Benito Sanchez",
-    descripcion:
-      "Rocky es un amor de perrito, lleno de energía y con ganas de llenar de alegría el hogar que le dé una oportunidad.",
-    logo: "https://vitakraft.es/wp-content/uploads/2020/12/Blog_HistoriaPerros-1110x600.jpg",
-    media: [
-      {
-        tipo: "image",
-        fuente:
-          "https://vitakraft.es/wp-content/uploads/2020/12/Blog_HistoriaPerros-1110x600.jpg",
-      },
-    ],
-  },
-];
+function tiempoTranscurrido(fechaISO) {
+  const fecha = new Date(fechaISO);
+  const ahora = new Date();
+  const segundos = Math.floor((ahora - fecha) / 1000);
+
+  const minutos = Math.floor(segundos / 60);
+  const horas = Math.floor(minutos / 60);
+  const dias = Math.floor(horas / 24);
+
+  if (segundos < 60) return "Hace unos segundos";
+  if (minutos < 60) return `Hace ${minutos} minuto${minutos > 1 ? "s" : ""}`;
+  if (horas < 24) return `Hace ${horas} hora${horas > 1 ? "s" : ""}`;
+  return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
+}
 
 export default function Message() {
-  const { index } = useLocalSearchParams();
+  const { index, nombre, descripcion, ubicacion, pet_id, created_at, logo } =
+    useLocalSearchParams();
   const router = useRouter();
-  const data = Post[index];
+  // const data = Post[index];
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [optionsVisible, setOptionsVisible] = useState(false);
@@ -108,24 +47,71 @@ export default function Message() {
   const [bookmark, setBookmark] = useState(false);
   const lastTap = useRef(null);
   const { addNotification } = useNotifications();
+  const [post, setPost] = useState([]);
 
-  const handleAddComment = () => {
+  // const handleAddComment = () => {
+  //   if (newComment.trim() === "") return;
+
+  //   const updatedComments = [
+  //     {
+  //       user: "Tú",
+  //       text: newComment.trim(),
+  //       createdAt: new Date().toISOString(),
+  //       liked: false,
+  //       likedCount: 0,
+  //     },
+  //     ...comments,
+  //   ];
+
+  //   setComments(updatedComments);
+  //   setNewComment("");
+  // };
+
+  const handleAddComment = async () => {
     if (newComment.trim() === "") return;
 
-    const updatedComments = [
+    const user = await supabase.auth.getUser(); // Asegúrate de tener autenticación habilitada
+    const userId = user.data?.user?.id;
+
+    console.log(user);
+
+    if (!userId) {
+      alert("Debes iniciar sesión para comentar.");
+      return;
+    }
+
+    const { error } = await supabase.from("comment").insert([
       {
-        user: "Tú",
+        content: newComment.trim(),
+        post_id: post[0]?.id, // Asegúrate de que `post[0]` contiene el post correcto
+        user_id: userId,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error al agregar comentario:", error.message);
+      alert("Hubo un error al enviar el comentario.");
+      return;
+    }
+
+    setComments((prev) => [
+      {
+        user: "Tú", // O puedes traer el username del usuario
         text: newComment.trim(),
         createdAt: new Date().toISOString(),
         liked: false,
         likedCount: 0,
       },
-      ...comments,
-    ];
+      ...prev,
+    ]);
 
-    setComments(updatedComments);
     setNewComment("");
   };
+
+  useEffect(() => {
+    fetchPost();
+    // handleAddComment();
+  }, []);
 
   const formatDate = (isoString) => {
     const date = new Date(isoString);
@@ -162,28 +148,28 @@ export default function Message() {
     setShowVerMas(e.nativeEvent.lines.length > 2);
   };
 
-  const imagesArray = Array.isArray(data?.media)
-    ? data.media.filter((item) => item && item.fuente)
-    : data?.media?.fuente
-      ? [{ tipo: data.media.tipo, fuente: data.media.fuente }]
+  const imagesArray = Array.isArray(post[0]?.media)
+    ? post[0]?.media.filter((item) => item && item.source)
+    : post[0]?.media?.source
+      ? [{ type: post[0]?.media.type, source: post[0]?.media.source }]
       : [];
 
   const onHidePost = (i) => {
-    const updated = [...data];
-    updated.splice(i, 1);
+    // const updated = [...data];
+    // updated.splice(i, 1);
   };
 
   const onReportPost = (i) => {
-    alert(`Publicación reportada: ${data.nombre}`);
+    alert(`Publicación reportada: ${nombre}`);
   };
 
   const handleOneTapLike = () => {
     if (!liked) {
       addNotification({
-        title: `Te ha gustado la publicación de ${data.nombre}`,
-        nombre: data.nombre,
-        imagen: data.imagen,
-        logo: data.logo,
+        title: `Te ha gustado la publicación de ${nombre}`,
+        nombre: nombre,
+        // imagen: data.imagen,
+        logo: logo,
         tipo: "like",
         fecha: new Date().toISOString(),
       });
@@ -201,10 +187,10 @@ export default function Message() {
     if (lastTap.current && now - lastTap.current < 300) {
       if (!liked) {
         addNotification({
-          title: `Te ha gustado la publicación de ${data.nombre}`,
-          nombre: data.nombre,
-          imagen: data.imagen,
-          logo: data.logo,
+          title: `Te ha gustado la publicación de ${nombre}`,
+          nombre: logo,
+          // imagen: data.imagen,
+          logo: logo,
           tipo: "like",
           fecha: new Date().toISOString(),
         });
@@ -215,6 +201,28 @@ export default function Message() {
       });
     } else {
       lastTap.current = now;
+    }
+  };
+
+  const fetchPost = async () => {
+    const { data, error } = await supabase
+      .from("post")
+      .select(
+        `
+        *,
+        media(
+          *
+        ),
+        comment(
+          *
+        )
+      `
+      )
+      .eq("pet_id", pet_id);
+    if (error) {
+      console.error("Error fetching posts:", error.message);
+    } else {
+      setPost(data);
     }
   };
 
@@ -235,10 +243,10 @@ export default function Message() {
                   pathname: "indexScreens/petProfile/[id]",
                   params: {
                     index: index,
-                    nombre: data.nombre,
-                    descripcion: data.descripcion,
-                    imagen: data.imagen,
-                    logo: data.logo,
+                    nombre: nombre,
+                    descripcion: descripcion,
+                    // imagen: data.imagen,
+                    logo: logo,
                   },
                 });
               }}
@@ -247,12 +255,14 @@ export default function Message() {
               <View>
                 <Image
                   className="w-10 h-10 rounded-full"
-                  source={{ uri: `${data.logo}` }}
+                  source={{ uri: `${logo}` }}
                 />
               </View>
               <View className="flex-col">
-                <Text className="text-gray-700 font-medium">{data.nombre}</Text>
-                <Text className="text-gray-400 font-normal">Hace 5 dias</Text>
+                <Text className="text-gray-700 font-medium">{nombre}</Text>
+                <Text className="text-gray-400 font-normal">
+                  {tiempoTranscurrido(post[0]?.created_at)}
+                </Text>
               </View>
             </Pressable>
 
@@ -302,7 +312,7 @@ export default function Message() {
               onTextLayout={onTextLayout}
               className="text-gray-800"
             >
-              {data.descripcion}
+              {descripcion}
             </Text>
             {showVerMas && (
               <Text className="text-gray-500 font-light">

@@ -233,7 +233,7 @@ export default function Profile() {
               className="justify-center items-center"
               onPress={() =>
                 router.push({
-                  pathname: "indexScreens/message",
+                  pathname: "indexScreens/comment",
                   params: {
                     index: index,
                   },

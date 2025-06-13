@@ -7,9 +7,9 @@ export function SliderItemPet({ item }) {
   const screenWidth = Dimensions.get("window").width;
   const screenHeight = Dimensions.get("window").height;
 
-  const isVideo = item.tipo === "video";
+  const isVideo = item.type === "video";
 
-  const player = useVideoPlayer(item.fuente, (player) => {
+  const player = useVideoPlayer(item.source, (player) => {
     player.loop = true;
     player.play();
   });
@@ -30,7 +30,7 @@ export function SliderItemPet({ item }) {
         />
       ) : (
         <Image
-          source={{ uri: item.fuente }}
+          source={{ uri: item.source }}
           className="w-full h-full"
           resizeMode="cover"
         />
