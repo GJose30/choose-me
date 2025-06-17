@@ -21,9 +21,12 @@ import {
   Market,
 } from "../Icon";
 import { Link } from "expo-router";
+import SignOutButton from "../SignOutButton";
+import { useSupabaseUserProfile } from "../HooksCustoms/useSupabaseUserProfile";
 
 export function SideBarModal({ visible, onClose }) {
   const slideAnim = useRef(new Animated.Value(-300)).current;
+  const { profile, loading, error } = useSupabaseUserProfile();
 
   const cerrarModalConAnimacion = () => {
     Animated.timing(slideAnim, {
@@ -83,14 +86,17 @@ export function SideBarModal({ visible, onClose }) {
                           onPress={onClose}
                         >
                           <Image
-                            source={{
-                              uri: "https://randomuser.me/api/portraits/men/32.jpg",
+                          source={{
+                              uri: profile?.profile_pic
+                                ? profile.profile_pic
+                                : "https://randomuser.me/api/portraits/men/32.jpg", // Imagen por defecto si no tiene foto
                             }}
                             className="w-12 h-12 rounded-full"
                           />
+
                           <View className="ml-4">
                             <Text className="text-lg font-semibold text-gray-800">
-                              Gil Araúz
+                            {loading ? "Cargando..." : (profile?.fullname || profile?.username || "Usuario")}  {/* Username desde supabase */}
                             </Text>
                             <Text className="text-base text-gray-500">
                               Ver perfil
@@ -220,15 +226,7 @@ export function SideBarModal({ visible, onClose }) {
 
                     {/* Botón de Cerrar sesión al fondo */}
                     <View className="px-6 mb-8">
-                      <Pressable
-                        onPress={cerrarModalConAnimacion}
-                        className="flex-row items-center"
-                      >
-                        <LogOut size={21} color="#4b5563" />
-                        <Text className="text-gray-600 text-lg font-semibold ml-2">
-                          Cerrar sesión
-                        </Text>
-                      </Pressable>
+                      <SignOutButton />
                     </View>
                   </View>
                 </Animated.View>

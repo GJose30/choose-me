@@ -10,6 +10,7 @@ import {
 import { Stack, Link } from "expo-router";
 import { ProfileMetric } from "../../components/profile/ProfileMetrics";
 import { MessageIcon } from "../../components/Icon";
+import { useSupabaseUserProfile } from "../../components/HooksCustoms/useSupabaseUserProfile";
 
 const user = {
   id: "123",
@@ -97,6 +98,7 @@ const user = {
 export default function Profile() {
   const screenWidth = Dimensions.get("window").width;
   const imageSize = screenWidth / 3;
+  const { profile, loading, error } = useSupabaseUserProfile();
 
   return (
     <ScrollView
@@ -123,7 +125,10 @@ export default function Profile() {
 
           {/* Foto perfil */}
           <Image
-            source={{ uri: user.fotoPerfil }}
+            source={{ uri: profile?.profile_pic
+              ? profile.profile_pic
+              : "https://randomuser.me/api/portraits/men/32.jpg", // Imagen por defecto si no tiene foto
+          }}
             className="w-28 h-28 rounded-full border-4 border-white"
           />
 
