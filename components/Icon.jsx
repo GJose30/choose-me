@@ -89,3 +89,11 @@ export const Plus = (props) => (
 export const Market = (props) => (
   <Ionicons name="storefront-outline" size={24} color="black" {...props} />
 );
+
+export const Star = (props) => (
+  <Feather name="star" size={24} color="black" {...props} />
+);
+
+export const Info = (props) => (
+  <Feather name="info" size={24} color="black" {...props} />
+);

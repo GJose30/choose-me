@@ -34,19 +34,58 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
   const [showVerMas, setShowVerMas] = useState(false);
   const { addNotification } = useNotifications();
   const [posts, setPosts] = useState([]);
+  const notificationCount = 1;
+
+  const fetchNotification = async () => {
+    const { error } = await supabase.from("notification").insert([
+      {
+        user_id: data.user_id, // Asegúrate de que data es el objeto JSON que has proporcionado
+        post_id: data.post[0].id, // Asegúrate de que hay al menos un post en el array
+        // user_id: "9b4fc3c3-df95-4763-b2b9-8449c78e9b3a",
+        // post_id: "fe5251f2-fced-4036-ae0d-18588ac01dac",
+        notification_type: "like",
+        message: "Tu mascota ha recibido un like",
+        is_read: false,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error al insertar la notificación:", error.message);
+    } else {
+      console.log("Notificación insertada correctamente:");
+    }
+  };
+
+  // const fetchPost = async () => {
+  //   const { data, error } = await supabase.from("adoption_pet").select(
+  //     `
+  //       *,
+  //       media_pet(
+  //         *
+  //       )
+  //     `
+  //   );
+  //   // .eq("id", adoption_pet_id);
+  //   if (error) {
+  //     console.error("Error fetching posts:", error.message);
+  //   } else {
+  //     setPost(data);
+  //   }
+  // };
 
   const handleDoubleTap = () => {
     const now = Date.now();
     if (lastTap.current && now - lastTap.current < 300) {
       if (!liked) {
-        addNotification({
-          title: `Te ha gustado la publicación de ${data.name}`,
-          nombre: data.name,
-          imagen: data.imagen,
-          logo: data.logo,
-          tipo: "like",
-          fecha: new Date().toISOString(),
-        });
+        // addNotification({
+        //   title: `Te ha gustado la publicación de ${data.name}`,
+        //   nombre: data.name,
+        //   imagen: data.imagen,
+        //   logo: data.logo,
+        //   tipo: "like",
+        //   fecha: new Date().toISOString(),
+        // });
+        fetchNotification();
       }
       setLiked((prev) => {
         setLikeCount((count) => (prev ? count - 1 : count + 1));
@@ -59,14 +98,15 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
 
   const handleOneTapLike = () => {
     if (!liked) {
-      addNotification({
-        title: `Te ha gustado la publicación de ${data.name}`,
-        nombre: data.name,
-        imagen: data.imagen,
-        logo: data.logo,
-        tipo: "like",
-        fecha: new Date().toISOString(),
-      });
+      // addNotification({
+      //   title: `Te ha gustado la publicación de ${data.name}`,
+      //   nombre: data.name,
+      //   imagen: data.imagen,
+      //   logo: data.logo,
+      //   tipo: "like",
+      //   fecha: new Date().toISOString(),
+      // });
+      fetchNotification();
     }
     setLiked((prev) => {
       setLikeCount((count) => (prev ? count - 1 : count + 1));
@@ -102,6 +142,7 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
       }
     };
     fetchPosts();
+    // console.log(data.post[0].id);
   }, []);
 
   return (

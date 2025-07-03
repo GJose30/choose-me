@@ -22,8 +22,8 @@ import { PetShareModal } from "../../../components/petProfile/PetShareModal";
 import { SliderPet } from "../../../components/petProfile/SliderPet";
 import { supabase } from "../../../lib/supabase";
 
-export default function PetProfile() {
-  const { index, nombre, descripcion, ubicacion, pet_id } =
+export default function AdoptionPetProfile() {
+  const { index, nombre, descripcion, ubicacion, adoption_pet_id } =
     useLocalSearchParams();
   const router = useRouter();
   const [petProfileModalVisible, setPetProfileModalVisible] = useState(false);
@@ -44,30 +44,28 @@ export default function PetProfile() {
       ? [{ type: post[0]?.media.type, source: post[0]?.media.source }]
       : [];
 
-  const fetchQualities = async () => {
-    const { data, error } = await supabase
-      .from("qualities")
-      .select(`*`)
-      .eq("pet_id", pet_id);
-    if (error) {
-      console.error("Error fetching posts:", error.message);
-    } else {
-      setQualities(data);
-    }
-  };
+  // const fetchQualities = async () => {
+  //   const { data, error } = await supabase
+  //     .from("qualities")
+  //     .select(`*`)
+  //     .eq("pet_id", pet_id);
+  //   if (error) {
+  //     console.error("Error fetching posts:", error.message);
+  //   } else {
+  //     setQualities(data);
+  //   }
+  // };
 
   const fetchPost = async () => {
-    const { data, error } = await supabase
-      .from("post")
-      .select(
-        `
+    const { data, error } = await supabase.from("adoption_pet").select(
+      `
         *,
-        media(
+        media_pet(
           *
         )
       `
-      )
-      .eq("pet_id", pet_id);
+    );
+    // .eq("id", adoption_pet_id);
     if (error) {
       console.error("Error fetching posts:", error.message);
     } else {
@@ -76,9 +74,10 @@ export default function PetProfile() {
   };
 
   useEffect(() => {
-    fetchQualities();
+    // fetchQualities();
     fetchPost();
-  }, []);
+    console.log(descripcion);
+  }, [descripcion]);
 
   return (
     <View className="flex-1">
@@ -162,7 +161,7 @@ export default function PetProfile() {
 
         <View className="flex px-5 mb-7 mt-5">
           <Text className="text-gray-700 text-xl font-semibold">Acerca de</Text>
-          <Text className="text-gray-400 text-base">{descripcion}</Text>
+          <Text className="text-gray-600 text-base">{descripcion}</Text>
         </View>
 
         <View className="flex-row gap-x-2 mb-5">
