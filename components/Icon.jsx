@@ -89,3 +89,19 @@ export const Plus = (props) => (
 export const Market = (props) => (
   <Ionicons name="storefront-outline" size={24} color="black" {...props} />
 );
+
+export const Mail = (props) => (
+  <AntDesign name="mail" size={24} color="black" {...props} />
+);
+
+export const EyeSlash = (props) => (
+  <FontAwesome6 name="eye-slash" size={24} color="black" {...props} />
+);
+
+export const Phone = (props) => (
+  <Feather name="smartphone" size={24} color="black" {...props} />
+);
+
+export const User = (props) => (
+  <Feather name="user" size={24} color="black" {...props} />
+);
