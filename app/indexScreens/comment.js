@@ -6,6 +6,7 @@ import {
   ScrollView,
   TextInput,
   Image,
+  FlatList,
 } from "react-native";
 import { Heart, Dots, Bookmark, MessageIcon } from "../../components/Icon";
 import { MessageOptions } from "../../components/Index/MessageOptions";
@@ -14,6 +15,7 @@ import { PostModal } from "../../components/Index/PostModal";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { useNotifications } from "../../contexts/NotificationContext";
 import { supabase } from "../../lib/supabase";
+import { useUser } from "@clerk/clerk-expo";
 
 function tiempoTranscurrido(fechaISO) {
   const fecha = new Date(fechaISO);
@@ -43,11 +45,15 @@ export default function Message() {
   const [expanded, setExpanded] = useState(false);
   const [showVerMas, setShowVerMas] = useState(false);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
+  const [likedComment, setLikedComment] = useState(false);
+  const [likeComment, setLikeComment] = useState(0);
+  const [commentLike, setCommentLike] = useState(0);
   const [bookmark, setBookmark] = useState(false);
   const lastTap = useRef(null);
   const { addNotification } = useNotifications();
+  const [comment, setComment] = useState([]);
   const [post, setPost] = useState([]);
+  const { isLoaded, isSignedIn, user } = useUser();
 
   // const handleAddComment = () => {
   //   if (newComment.trim() === "") return;
@@ -67,36 +73,104 @@ export default function Message() {
   //   setNewComment("");
   // };
 
-  const handleAddComment = async () => {
+  // const handleAddComment = async () => {
+  //   if (newComment.trim() === "") return;
+
+  //   // const user = await supabase.auth.getUser(); // Asegúrate de tener autenticación habilitada
+  //   // const userId = user.data?.user?.id;
+
+  //   const userId = user.id;
+
+  //   // console.log(user);
+
+  //   if (!userId) {
+  //     alert("Debes iniciar sesión para comentar.");
+  //     return;
+  //   }
+
+  //   const { error } = await supabase.from("comment").insert([
+  //     {
+  //       content: newComment.trim(),
+  //       post_id: post[0]?.id, // Asegúrate de que `post[0]` contiene el post correcto
+  //       user_id: userId,
+  //     },
+  //   ]);
+
+  //   if (error) {
+  //     console.error("Error al agregar comentario:", error.message);
+  //     alert("Hubo un error al enviar el comentario.");
+  //     return;
+  //   }
+
+  //   setComments((prev) => [
+  //     {
+  //       user: "Tú", // O puedes traer el username del usuario
+  //       text: newComment.trim(),
+  //       createdAt: new Date().toISOString(),
+  //       liked: false,
+  //       likedCount: 0,
+  //     },
+  //     ...prev,
+  //   ]);
+
+  //   setNewComment("");
+  // };
+
+  const handleAddComment = async (postId) => {
     if (newComment.trim() === "") return;
 
-    const user = await supabase.auth.getUser(); // Asegúrate de tener autenticación habilitada
-    const userId = user.data?.user?.id;
+    // obtienes el usuario Clerk
+    const clerkId = user?.id;
 
-    console.log(user);
-
-    if (!userId) {
+    if (!clerkId) {
       alert("Debes iniciar sesión para comentar.");
       return;
     }
 
-    const { error } = await supabase.from("comment").insert([
+    // buscar el usuario de supabase con ese clerkId
+    const { data: supaUser, error: supaError } = await supabase
+      .from("user")
+      .select("id")
+      .eq("clerk_id", clerkId)
+      .single();
+
+    if (supaError || !supaUser) {
+      console.error("Error obteniendo usuario de supabase:", supaError);
+      return;
+    }
+
+    const supaUserId = supaUser.id;
+
+    // Insertar el comentario
+    const { error: insertError } = await supabase.from("comment").insert([
       {
         content: newComment.trim(),
-        post_id: post[0]?.id, // Asegúrate de que `post[0]` contiene el post correcto
-        user_id: userId,
+        post_id: postId, // Usamos el postId que recibimos como parámetro
+        user_id: supaUserId,
       },
     ]);
 
-    if (error) {
-      console.error("Error al agregar comentario:", error.message);
+    if (insertError) {
+      console.error("Error al agregar comentario:", insertError.message);
       alert("Hubo un error al enviar el comentario.");
       return;
     }
 
+    // Incrementar contador de comentarios en el post
+    const { data: updateData, error: updateError } = await supabase
+      .from("post")
+      .update({ comment: supabase.raw("comment + 1") })
+      .eq("id", postId);
+
+    if (updateError) {
+      console.error("Error incrementando comment:", updateError.message);
+    } else {
+      console.log("Post actualizado:", updateData);
+    }
+
     setComments((prev) => [
       {
-        user: "Tú", // O puedes traer el username del usuario
+        user: "Tú",
         text: newComment.trim(),
         createdAt: new Date().toISOString(),
         liked: false,
@@ -108,29 +182,78 @@ export default function Message() {
     setNewComment("");
   };
 
-  useEffect(() => {
-    fetchPost();
-    // handleAddComment();
-  }, []);
+  // const formatDate = (isoString) => {
+  //   const date = new Date(isoString);
+  //   return date.toLocaleString("es-PA", {
+  //     day: "numeric",
+  //     month: "short",
+  //     year: "numeric",
+  //     hour: "2-digit",
+  //     minute: "2-digit",
+  //   });
+  // };
 
-  const formatDate = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleString("es-PA", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // const handleLike = async (id) => {
+  //   const { data, error } = await supabase
+  //     .from("comment")
+  //     .select("*")
+  //     .eq("id", id);
 
-  const handleLike = (index) => {
-    const updated = [...comments];
-    updated[index].liked = !updated[index].liked;
-    updated[index].likedCount = updated[index].liked
-      ? updated[index].likedCount + 1
-      : updated[index].likedCount - 1;
-    setComments(updated);
+  //   if (error) {
+  //     console.error("Error fetching posts:", error.message);
+  //     return;
+  //   }
+
+  //   const currentLikes = data[0]?.likes ?? 0;
+  //   const newLikes = !likedComment ? currentLikes + 1 : currentLikes - 1;
+
+  //   const { error: updateError } = await supabase
+  //     .from("comment")
+  //     .update({ likes: newLikes })
+  //     .eq("id", id);
+
+  //   if (updateError) {
+  //     console.error("Error actualizando likes:", updateError.message);
+  //   } else {
+  //     setLikedComment(!likedComment);
+  //   }
+  // };
+
+  const handleLike = async (id) => {
+    try {
+      // 🔴 Cambia el estado en la UI al instante (optimista)
+      setComment((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                liked: !item.liked,
+                likes: item.liked ? item.likes - 1 : item.likes + 1,
+              }
+            : item
+        )
+      );
+
+      // 🔵 Luego actualizas en Supabase
+      const { data, error } = await supabase
+        .from("comment")
+        .select("likes")
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+
+      const newLikes = data.likes + 1;
+
+      const { error: updateError } = await supabase
+        .from("comment")
+        .update({ likes: newLikes })
+        .eq("id", id);
+
+      if (updateError) throw updateError;
+    } catch (err) {
+      console.error("Error actualizando likes:", err.message);
+    }
   };
 
   const borrarComentario = (index) => {
@@ -148,11 +271,12 @@ export default function Message() {
     setShowVerMas(e.nativeEvent.lines.length > 2);
   };
 
-  const imagesArray = Array.isArray(post[0]?.media)
-    ? post[0]?.media.filter((item) => item && item.source)
-    : post[0]?.media?.source
-      ? [{ type: post[0]?.media.type, source: post[0]?.media.source }]
-      : [];
+  const imagesArray = Array.isArray(post[0]?.media_post)
+    ? post[0]?.media_post.map((item) => ({
+        type: item.type,
+        source: item.source,
+      }))
+    : [];
 
   const onHidePost = (i) => {
     // const updated = [...data];
@@ -175,7 +299,7 @@ export default function Message() {
       });
     }
     setLiked((prev) => {
-      setLikeCount((count) => (prev ? count - 1 : count + 1));
+      setLikeComment((count) => (prev ? count - 1 : count + 1));
       return !prev;
     });
   };
@@ -196,7 +320,7 @@ export default function Message() {
         });
       }
       setLiked((prev) => {
-        setLikeCount((count) => (prev ? count - 1 : count + 1));
+        setLikeComment((count) => (prev ? count - 1 : count + 1));
         return !prev;
       });
     } else {
@@ -210,21 +334,50 @@ export default function Message() {
       .select(
         `
         *,
-        media(
-          *
-        ),
-        comment(
-          *
-        )
+          media_post(
+            *
+          ),
+          comment(
+            *
+          )
       `
       )
-      .eq("pet_id", pet_id);
+      .eq("id", index);
     if (error) {
       console.error("Error fetching posts:", error.message);
     } else {
       setPost(data);
     }
   };
+
+  const fetchComment = async () => {
+    const { data, error } = await supabase
+      .from("comment")
+      .select(
+        `
+      *,
+      user(
+        *
+      ),
+      post(
+        *,
+        media_post(*)
+      )
+    `
+      )
+      .eq("post_id", index);
+    if (error) {
+      console.error("Error fetching posts:", error.message);
+    } else {
+      setComment(data);
+    }
+  };
+
+  useEffect(() => {
+    fetchPost();
+    fetchComment();
+    // console.log(comment);
+  }, []);
 
   return (
     <View className="flex-1 bg-white">
@@ -320,62 +473,68 @@ export default function Message() {
               </Text>
             )}
           </Pressable>
+          <View className="border-t border-gray-200 mx-4 my-4"></View>
 
-          <ScrollView
-            className="my-4 mx-4"
+          {/* Comentarios */}
+          <FlatList
+            data={comment}
+            keyExtractor={(item, index) => index.toString()}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ flexGrow: 1 }}
-          >
-            <View className="flex-row items-center border-t border-gray-200 pt-2 mb-4">
-              <TextInput
-                placeholder="Agregar un comentario..."
-                value={newComment}
-                onChangeText={setNewComment}
-                className="flex-1 text-base px-3 py-2 bg-gray-100 rounded-full mr-2"
-              />
-              <Pressable onPress={handleAddComment}>
-                <Text className="text-blue-600 font-semibold">Enviar</Text>
-              </Pressable>
-            </View>
-            {comments.map((item, index) => (
+            scrollEnabled={false}
+            ListHeaderComponent={
+              <View className="flex-row items-center mb-3">
+                <TextInput
+                  placeholder="Agregar un comentario..."
+                  value={newComment}
+                  onChangeText={setNewComment}
+                  className="flex-1 text-base px-3 py-2 bg-gray-100 rounded-full mr-2"
+                />
+                <Pressable onPress={handleAddComment}>
+                  <Text className="text-blue-600 font-semibold">Enviar</Text>
+                </Pressable>
+              </View>
+            }
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
+            renderItem={({ item, index }) => (
               <Pressable
-                key={index}
                 onLongPress={() => {
                   setSelectedIndex(index);
                   setOptionsVisible(true);
                 }}
               >
-                <View className="mb-3 flex-row items-center">
+                <View className="flex-row items-center my-2">
                   <View>
                     <Text className="text-gray-800 font-medium">
-                      {item.user}
+                      {item.user?.username}
                     </Text>
-                    <Text className="text-gray-600">{item.text}</Text>
+                    <Text className="text-gray-600">{item.content}</Text>
+
                     <Text className="text-gray-400 text-sm">
-                      {formatDate(item.createdAt)}
+                      {tiempoTranscurrido(item.created_at)}
                     </Text>
                   </View>
                   <Pressable
-                    onPress={() => handleLike(index)}
+                    onPress={() => handleLike(item.id)}
                     className="ml-auto flex-row gap-1 items-center justify-center"
                   >
                     <Heart size={18} color={item.liked ? "red" : "#374151"} />
                     <Text className="text-gray-600 font-medium">
-                      {item.likedCount}
+                      {item.likes}
                     </Text>
                   </Pressable>
                 </View>
               </Pressable>
-            ))}
-            {/* Opciones del mensaje */}
-            <MessageOptions
-              visible={optionsVisible}
-              onClose={() => setOptionsVisible(false)}
-              selectedCommentIndex={selectedIndex}
-              onDelete={borrarComentario}
-              onReport={reportarComentario}
-            />
-          </ScrollView>
+            )}
+            ListFooterComponent={
+              <MessageOptions
+                visible={optionsVisible}
+                onClose={() => setOptionsVisible(false)}
+                selectedCommentIndex={selectedIndex}
+                onDelete={borrarComentario}
+                onReport={reportarComentario}
+              />
+            }
+          />
         </View>
       </ScrollView>
     </View>

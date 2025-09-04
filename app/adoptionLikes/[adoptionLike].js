@@ -11,39 +11,39 @@ import { Stack } from "expo-router";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
-const likedPets = [
-  {
-    id: 1,
-    name: "Luna",
-    age: 3,
-    location: "Ciudad de Panamá",
-    image:
-      "https://cdn.pixabay.com/photo/2016/02/19/11/19/dog-1207816_1280.jpg",
-  },
-  {
-    id: 2,
-    name: "Max",
-    age: 5,
-    location: "David, Chiriquí",
-    image:
-      "https://cdn.pixabay.com/photo/2017/09/25/13/12/dog-2785074_1280.jpg",
-  },
-  {
-    id: 3,
-    name: "Bella",
-    age: 2,
-    location: "Colón",
-    image: "https://cdn.pixabay.com/photo/2015/03/26/09/54/dog-690176_1280.jpg",
-  },
-  {
-    id: 4,
-    name: "Rocky",
-    age: 4,
-    location: "Santiago, Veraguas",
-    image:
-      "https://cdn.pixabay.com/photo/2017/11/30/18/17/dog-2982426_1280.jpg",
-  },
-];
+// const likedPets = [
+//   {
+//     id: 1,
+//     name: "Luna",
+//     age: 3,
+//     location: "Ciudad de Panamá",
+//     image:
+//       "https://cdn.pixabay.com/photo/2016/02/19/11/19/dog-1207816_1280.jpg",
+//   },
+//   {
+//     id: 2,
+//     name: "Max",
+//     age: 5,
+//     location: "David, Chiriquí",
+//     image:
+//       "https://cdn.pixabay.com/photo/2017/09/25/13/12/dog-2785074_1280.jpg",
+//   },
+//   {
+//     id: 3,
+//     name: "Bella",
+//     age: 2,
+//     location: "Colón",
+//     image: "https://cdn.pixabay.com/photo/2015/03/26/09/54/dog-690176_1280.jpg",
+//   },
+//   {
+//     id: 4,
+//     name: "Rocky",
+//     age: 4,
+//     location: "Santiago, Veraguas",
+//     image:
+//       "https://cdn.pixabay.com/photo/2017/11/30/18/17/dog-2982426_1280.jpg",
+//   },
+// ];
 
 export default function AdoptionLikes() {
   const router = useRouter();
@@ -77,7 +77,7 @@ export default function AdoptionLikes() {
   // };
 
   const fetchAdoptionPetLikes = async () => {
-    const userId = "9b4fc3c3-df95-4763-b2b9-8449c78e9b3a"; // usuario fijo
+    const userId = "5c16bcb5-489c-465e-8f42-186c6fe9061f"; // usuario fijo
 
     const { data, error } = await supabase
       .from("adoption_likes_pet")
@@ -85,7 +85,7 @@ export default function AdoptionLikes() {
         `
         adoption_pet (
           *,
-          media_pet (
+          media_adoption_pet (
             *
           )
         )
@@ -99,7 +99,7 @@ export default function AdoptionLikes() {
       const petsWithLikes = data.map((like) => {
         const pet = like.adoption_pet;
         const image =
-          pet.media_pet?.find((m) => m.type === "image")?.source || "";
+          pet.media_adoption_pet?.find((m) => m.type === "image")?.source || "";
         const birthdate = pet.birthdate ? new Date(pet.birthdate) : null;
         const today = new Date();
         const age = birthdate
@@ -131,7 +131,7 @@ export default function AdoptionLikes() {
 
   useEffect(() => {
     fetchAdoptionPetLikes();
-    // console.log(adoptionPet.id);
+    console.log(adoptionPet);
   }, []);
 
   const renderCard = ({ item }) => (

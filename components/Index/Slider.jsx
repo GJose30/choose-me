@@ -1,5 +1,5 @@
 import { View, FlatList, Pressable } from "react-native";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SliderItem } from "./SliderItem";
 import { Pagination } from "./Pagination";
 
@@ -15,6 +15,10 @@ export function Slider({ images, onHandleDoubleTap }) {
   });
 
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
+
+  useEffect(() => {
+    // console.log(images);
+  }, []);
 
   return (
     <View>

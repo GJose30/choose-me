@@ -1,6 +1,7 @@
 import { Image, View, Dimensions, StyleSheet } from "react-native";
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { useEffect } from "react";
 
 export function SliderItem({ item }) {
   const screenWidth = Dimensions.get("window").width;

@@ -7,7 +7,7 @@ import { Heart, Close, Paw, Info } from "../../components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 
 export default function Adoption() {
-  const [media, setMedia] = useState([]);
+  const [adoptionPet, setAdoptionPet] = useState([]);
   const [index, setIndex] = useState(0);
   const screenWidth = Dimensions.get("window").width;
   const screenHeight = Dimensions.get("window").height;
@@ -15,24 +15,6 @@ export default function Adoption() {
   const [swipeMessage, setSwipeMessage] = useState("");
   const [canSwipe, setCanSwipe] = useState(true);
   const isManualSwipe = useRef(false);
-
-  const fetchAdoptionPet = async () => {
-    const { data, error } = await supabase.from("adoption_pet").select(`
-      *,
-      media_pet(
-              *
-      )
-    `);
-    if (error) {
-      console.error("Error fetching media:", error.message);
-    } else {
-      // Filtrar mascotas que tengan al menos una imagen en media_pet
-      const imageData = data.filter((item) =>
-        item.media_pet?.some((media) => media.type === "image")
-      );
-      setMedia(imageData);
-    }
-  };
 
   // const handleSwipe = (direction) => {
   //   if (!canSwipe) return;
@@ -56,6 +38,24 @@ export default function Adoption() {
   //   }, 1000);
   // };
 
+  const fetchAdoptionPet = async () => {
+    const { data, error } = await supabase.from("adoption_pet").select(`
+      *,
+      media_adoption_pet(
+        *
+      )
+    `);
+    if (error) {
+      console.error("Error fetching media:", error.message);
+    } else {
+      // Filtrar mascotas que tengan al menos una imagen en media_adoption_pet
+      // const imageData = data.filter((item) =>
+      //   item.media_pet?.some((media) => media.type === "image")
+      // );
+      setAdoptionPet(data);
+    }
+  };
+
   const handleSwipe = async (direction) => {
     if (!canSwipe) return;
 
@@ -64,9 +64,9 @@ export default function Adoption() {
     setCanSwipe(false);
 
     // 👇 Hacer insert si es swipe derecho desde botón
-    if (direction === "right" && media[index]) {
-      const adoption_pet_id = media[index].id;
-      const user_id = "9b4fc3c3-df95-4763-b2b9-8449c78e9b3a";
+    if (direction === "right" && adoptionPet[index]) {
+      const adoption_pet_id = adoptionPet[index].id;
+      const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
 
       const { error } = await supabase
         .from("adoption_likes_pet")
@@ -108,6 +108,7 @@ export default function Adoption() {
 
   useEffect(() => {
     fetchAdoptionPet();
+    console.log(adoptionPet);
   }, []);
 
   useEffect(() => {
@@ -160,7 +161,7 @@ export default function Adoption() {
           </Link>
         </View>
       </LinearGradient>
-      {media.length > 0 ? (
+      {adoptionPet.length > 0 ? (
         <View className="flex-1 items-center justify-between">
           {swipeMessage !== "" && (
             <View
@@ -188,7 +189,7 @@ export default function Adoption() {
             ref={(c) => {
               swiperRef.current = c;
             }}
-            cards={media}
+            cards={adoptionPet}
             renderCard={(mediaItem) => (
               <View className="gap-y-2">
                 <View
@@ -202,7 +203,7 @@ export default function Adoption() {
                 >
                   <Image
                     // source={{ uri: mediaItem[0].source }}
-                    source={{ uri: mediaItem.media_pet[0]?.source }}
+                    source={{ uri: mediaItem.media_adoption_pet[0]?.source }}
                     className="w-full h-[80%] rounded-tl-3xl"
                     resizeMode="cover"
                   />
@@ -295,8 +296,8 @@ export default function Adoption() {
               // 👇 No hagas nada si ya insertaste desde botón
               if (isManualSwipe.current) return;
 
-              const adoption_pet_id = media[i]?.id;
-              const user_id = "9b4fc3c3-df95-4763-b2b9-8449c78e9b3a";
+              const adoption_pet_id = adoptionPet[i]?.id;
+              const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
 
               const { error } = await supabase
                 .from("adoption_likes_pet")
@@ -314,12 +315,14 @@ export default function Adoption() {
               setSwipeMessage("");
             }}
             onSwipedLeft={(i) => {
-              console.log(`Pasaste mascota con post_id: ${media[i]?.post_id}`);
+              console.log(
+                `Pasaste mascota con post_id: ${adoptionPet[i]?.post_id}`
+              );
               setSwipeMessage("");
             }}
             onSwipedTop={(i) => {
               console.log(
-                `Adoptaste la mascota con post_id: ${media[i]?.post_id}`
+                `Adoptaste la mascota con post_id: ${adoptionPet[i]?.post_id}`
               );
               alert("Me adoptaste");
               setSwipeMessage("");

@@ -4,24 +4,31 @@ import { View, Text, FlatList, Image } from "react-native";
 import { Stack } from "expo-router";
 import { NotificationIcon } from "../../components/Icon";
 import { supabase } from "../../lib/supabase";
+import { useUser } from "@clerk/clerk-expo";
+import { useSupabaseUserProfile } from "../../components/HooksCustoms/useSupabaseUserProfile";
 
 export default function Notification() {
   // const { notifications } = useNotifications();
   const [notification, setNotification] = useState([]);
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { profile, loading, error } = useSupabaseUserProfile();
 
   const fetchNotification = async () => {
-    const { data, error } = await supabase.from("notification").select(`
+    const { data, error } = await supabase.from("notification").select(
+      `
           *,
             user (
               *
             ),
             post (
               *,
-              media (
+              media_post (
                 *
               )
             )
-        `);
+        `
+    );
+    // .eq("clerk_id", user.id); // Clerk ID;
 
     if (error) {
       console.error("Error fetching posts:", error.message);
@@ -40,10 +47,11 @@ export default function Notification() {
   }, []);
 
   useEffect(() => {
-    if (notification.length > 0 && notification[0].user.username) {
-      console.log(notification[0].post.media[0].source);
-    }
-  }, [notification]); // Escucha cambios en todo el array
+    // if (notification.length > 0 && notification[0].user.username) {
+    //   console.log(notification[0].post.media[0].source);
+    // }
+    console.log(notification[2]?.post.media_post[0]?.source);
+  }, []); // Escucha cambios en todo el array
 
   return (
     <View className="bg-white flex-1 p-4">
@@ -72,7 +80,7 @@ export default function Notification() {
           renderItem={({ item }) => (
             <View className="flex-row items-center gap-3 mb-4">
               <Image
-                source={{ uri: item.user.profile_pic }}
+                source={{ uri: profile?.profile_pic }}
                 className="w-12 h-12 rounded-full"
               />
               <View className="flex-1">
@@ -87,7 +95,8 @@ export default function Notification() {
                 </Text>
               </View>
               <Image
-                source={{ uri: item.post.media[0].source }}
+                source={{ uri: item.post?.media_post?.[0]?.source }}
+                // notification[0]?.post.media_post[0]?.source
                 className="w-12 h-12 rounded-lg"
               />
             </View>

@@ -23,14 +23,14 @@ import { SliderPet } from "../../../components/petProfile/SliderPet";
 import { supabase } from "../../../lib/supabase";
 
 export default function PetProfile() {
-  const { index, nombre, descripcion, ubicacion, pet_id } =
+  const { index, nombre, descripcion, ubicacion, profile_pic, pet_id } =
     useLocalSearchParams();
   const router = useRouter();
   const [petProfileModalVisible, setPetProfileModalVisible] = useState(false);
   const [petShareModalVisible, setPetShareModalVisible] = useState(false);
   const [liked, setLiked] = useState(false);
   const [qualities, setQualities] = useState([]);
-  const [post, setPost] = useState([]);
+  const [pet, setPet] = useState([]);
 
   const onReportPost = () => {
     alert(`Usuario reportado ${nombre}`);
@@ -38,10 +38,10 @@ export default function PetProfile() {
 
   const handleLike = () => setLiked((prev) => !prev);
 
-  const imagesArray = Array.isArray(post[0]?.media)
-    ? post[0]?.media.filter((item) => item && item.source)
-    : post[0]?.media?.source
-      ? [{ type: post[0]?.media.type, source: post[0]?.media.source }]
+  const imagesArray = Array.isArray(pet[0]?.media)
+    ? pet[0]?.media.filter((item) => item && item.source)
+    : pet[0]?.media?.source
+      ? [{ type: pet[0]?.media.type, source: pet[0]?.media.source }]
       : [];
 
   const fetchQualities = async () => {
@@ -56,28 +56,55 @@ export default function PetProfile() {
     }
   };
 
-  const fetchPost = async () => {
+  const fetchPet = async () => {
     const { data, error } = await supabase
-      .from("post")
+      .from("pet")
       .select(
         `
         *,
-        media(
+        media_pet(
           *
+        ),
+        post(
+          *,
+          media_post(
+            *
+          )
         )
       `
       )
-      .eq("pet_id", pet_id);
+      .eq("id", pet_id);
     if (error) {
       console.error("Error fetching posts:", error.message);
     } else {
-      setPost(data);
+      setPet(data);
     }
   };
 
+  //  const fetchPost = async () => {
+  //    const { data, error } = await supabase
+  //      .from("pet")
+  //      .select(
+  //        `
+  //       *,
+  //       media_pet(
+  //         *
+  //       )
+  //     `
+  //      )
+  //      .eq("pet_id", pet_id);
+  //    if (error) {
+  //      console.error("Error fetching posts:", error.message);
+  //    } else {
+  //      setPost(data);
+  //    }
+  //  };
+
   useEffect(() => {
     fetchQualities();
-    fetchPost();
+    fetchPet();
+    console.log(profile_pic);
+    // fetchPost();
   }, []);
 
   return (

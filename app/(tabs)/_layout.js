@@ -167,18 +167,31 @@ export default function TabsLayout() {
         options={{
           headerTitle: "",
           title: "",
-          headerStyle: { backgroundColor: "#FE9B5C" },
+          // headerStyle: { backgroundColor: "#FE9B5C" },
+          // tabBarIcon: ({ color }) => (
+          //   <View
+          //     style={{
+          //       alignItems: "center",
+          //       justifyContent: "center",
+          //       top: 4,
+          //       height: 50,
+          //       width: 50,
+          //     }}
+          //   >
+          //     <Plus color={"white"} size={37} />
+          //   </View>
+          // ),
           tabBarIcon: ({ color }) => (
             <View
               style={{
                 alignItems: "center",
                 justifyContent: "center",
                 top: 4,
-                height: 50,
-                width: 50,
+                height: 38,
+                width: 38,
               }}
             >
-              <Plus color={"white"} size={37} />
+              <Plus color={"white"} size={34} />
             </View>
           ),
         }}

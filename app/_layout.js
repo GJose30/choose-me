@@ -1,13 +1,21 @@
 import { Stack } from "expo-router";
 import { NotificationProvider } from "../contexts/NotificationContext";
+import { ClerkProvider } from "@clerk/clerk-expo"; // Importa Clerk
+import Constants from "expo-constants";
+import InitialLayout from "../components/InitialLayout";
 
 export default function Layout() {
   return (
-    <NotificationProvider>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-    </NotificationProvider>
+    <ClerkProvider
+      publishableKey={Constants.expoConfig?.extra?.clerkPublishableKey}
+    >
+      <NotificationProvider>
+        {/* <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} /> */}
+        <InitialLayout />
+        {/* </Stack> */}
+      </NotificationProvider>
+    </ClerkProvider>
   );
 }
 

@@ -22,7 +22,7 @@ function tiempoTranscurrido(fechaISO) {
   return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
 }
 
-export function PostItem({ data, id, index, onHidePost, onReportPost }) {
+export function PostItem({ dataPost, id, index, onHidePost, onReportPost }) {
   const router = useRouter();
   const [liked, setLiked] = useState(false);
   const lastTap = useRef(null);
@@ -39,10 +39,8 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
   const fetchNotification = async () => {
     const { error } = await supabase.from("notification").insert([
       {
-        user_id: data.user_id, // Asegúrate de que data es el objeto JSON que has proporcionado
-        post_id: data.post[0].id, // Asegúrate de que hay al menos un post en el array
-        // user_id: "9b4fc3c3-df95-4763-b2b9-8449c78e9b3a",
-        // post_id: "fe5251f2-fced-4036-ae0d-18588ac01dac",
+        user_id: dataPost.user_id,
+        post_id: dataPost.id,
         notification_type: "like",
         message: "Tu mascota ha recibido un like",
         is_read: false,
@@ -56,62 +54,124 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
     }
   };
 
-  // const fetchPost = async () => {
-  //   const { data, error } = await supabase.from("adoption_pet").select(
-  //     `
-  //       *,
-  //       media_pet(
-  //         *
-  //       )
-  //     `
-  //   );
-  //   // .eq("id", adoption_pet_id);
-  //   if (error) {
-  //     console.error("Error fetching posts:", error.message);
-  //   } else {
-  //     setPost(data);
-  //   }
-  // };
-
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    if (lastTap.current && now - lastTap.current < 300) {
+  const handleDoubleTap = async () => {
+    try {
       if (!liked) {
-        // addNotification({
-        //   title: `Te ha gustado la publicación de ${data.name}`,
-        //   nombre: data.name,
-        //   imagen: data.imagen,
-        //   logo: data.logo,
-        //   tipo: "like",
-        //   fecha: new Date().toISOString(),
-        // });
         fetchNotification();
+
+        // Obtener los likes actuales
+        const { data, error } = await supabase
+          .from("post")
+          .select("likes")
+          .eq("id", dataPost.id)
+          .single();
+
+        if (error) {
+          console.error("Error obteniendo likes:", error.message);
+          return;
+        }
+
+        // Actualizar con suma o resta
+        const newLikes = data.likes + 1; // o -1
+
+        const { error: updateError } = await supabase
+          .from("post")
+          .update({ likes: newLikes })
+          .eq("id", dataPost.id);
+
+        if (updateError) {
+          console.error("Error actualizando likes:", updateError.message);
+        }
+      } else {
+        // Obtener los likes actuales
+        const { data, error } = await supabase
+          .from("post")
+          .select("likes")
+          .eq("id", dataPost.id)
+          .single();
+
+        if (error) {
+          console.error("Error obteniendo likes:", error.message);
+          return;
+        }
+
+        // Actualizar con suma o resta
+        const newLikes = data.likes - 1; // o -1
+
+        const { error: updateError } = await supabase
+          .from("post")
+          .update({ likes: newLikes })
+          .eq("id", dataPost.id);
+
+        if (updateError) {
+          console.error("Error actualizando likes:", updateError.message);
+        }
       }
-      setLiked((prev) => {
-        setLikeCount((count) => (prev ? count - 1 : count + 1));
-        return !prev;
-      });
-    } else {
-      lastTap.current = now;
+
+      setLiked(!liked);
+    } catch (err) {
+      console.error("Error actualizando likes:", err.message);
     }
   };
 
-  const handleOneTapLike = () => {
-    if (!liked) {
-      // addNotification({
-      //   title: `Te ha gustado la publicación de ${data.name}`,
-      //   nombre: data.name,
-      //   imagen: data.imagen,
-      //   logo: data.logo,
-      //   tipo: "like",
-      //   fecha: new Date().toISOString(),
-      // });
-      fetchNotification();
+  const handleOneTapLike = async () => {
+    try {
+      if (!liked) {
+        fetchNotification();
+
+        // Obtener los likes actuales
+        const { data, error } = await supabase
+          .from("post")
+          .select("likes")
+          .eq("id", dataPost.id)
+          .single();
+
+        if (error) {
+          console.error("Error obteniendo likes:", error.message);
+          return;
+        }
+
+        // Actualizar con suma o resta
+        const newLikes = data.likes + 1; // o -1
+
+        const { error: updateError } = await supabase
+          .from("post")
+          .update({ likes: newLikes })
+          .eq("id", dataPost.id);
+
+        if (updateError) {
+          console.error("Error actualizando likes:", updateError.message);
+        }
+      } else {
+        // Obtener los likes actuales
+        const { data, error } = await supabase
+          .from("post")
+          .select("likes")
+          .eq("id", dataPost.id)
+          .single();
+
+        if (error) {
+          console.error("Error obteniendo likes:", error.message);
+          return;
+        }
+
+        // Actualizar con suma o resta
+        const newLikes = data.likes - 1; // o -1
+
+        const { error: updateError } = await supabase
+          .from("post")
+          .update({ likes: newLikes })
+          .eq("id", dataPost.id);
+
+        if (updateError) {
+          console.error("Error actualizando likes:", updateError.message);
+        }
+      }
+
+      setLiked(!liked);
+    } catch (err) {
+      console.error("Error actualizando likes:", err.message);
     }
-    setLiked((prev) => {
-      setLikeCount((count) => (prev ? count - 1 : count + 1));
-      return !prev;
-    });
   };
 
   const handleOneTapBookmark = () => setBookmark((prev) => !prev);
@@ -120,29 +180,16 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
     setShowVerMas(e.nativeEvent.lines.length > 2);
   };
 
-  const imagesArray = Array.isArray(data.post)
-    ? data.post.flatMap((post) =>
-        Array.isArray(post.media)
-          ? post.media
-              .filter((item) => !!item.source)
-              .map((item) => ({
-                type: item.type,
-                source: item.source,
-              }))
-          : []
-      )
+  const imagesArray = Array.isArray(dataPost.media_post)
+    ? dataPost.media_post.map((item) => ({
+        type: item.type,
+        source: item.source,
+      }))
     : [];
 
   useEffect(() => {
-    const fetchPosts = async () => {
-      const { data, error } = await supabase.from("post").select("*");
-      if (error) console.log(error);
-      else {
-        setPosts(data);
-      }
-    };
-    fetchPosts();
-    // console.log(data.post[0].id);
+    // console.log(data.likes);
+    // console.log(dataPost.id);
   }, []);
 
   return (
@@ -155,9 +202,10 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
               pathname: "indexScreens/petProfile/[id]",
               params: {
                 index: index,
-                nombre: data.name,
-                descripcion: data.description,
-                ubicacion: data.location,
+                nombre: dataPost.pet.name,
+                descripcion: dataPost.pet.description,
+                ubicacion: dataPost.pet.location,
+                profile_pic: dataPost.pet[0]?.media_pet.source,
                 pet_id: id,
                 // imagen: data.imagen,
                 // logo: data.logo,
@@ -167,13 +215,14 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
         >
           <Image
             className="w-10 h-10 rounded-full"
-            source={{ uri: `${data.logo}` }}
+            source={{ uri: `${dataPost.pet.logo}` }}
           />
           <View className="flex-col">
-            <Text className="text-gray-700 font-medium">{data.name}</Text>
-            {/* <Text className="text-gray-400 font-normal">Hace 5 dias</Text> */}
+            <Text className="text-gray-700 font-medium">
+              {dataPost.pet.name}
+            </Text>
             <Text className="text-gray-400 font-normal">
-              {tiempoTranscurrido(data.post[0].created_at)}
+              {tiempoTranscurrido(dataPost.created_at)}
             </Text>
           </View>
         </Pressable>
@@ -206,7 +255,9 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
           className="flex-row gap-1 items-center"
         >
           <Heart color={liked ? "red" : "#374151"} size={24} />
-          <Text className="text-gray-600 font-medium text-lg">{likeCount}</Text>
+          <Text className="text-gray-600 font-medium text-lg">
+            {dataPost.likes}
+          </Text>
         </Pressable>
         <Pressable
           className="flex-row gap-2 justify-center items-center"
@@ -214,20 +265,20 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
             router.push({
               pathname: "indexScreens/comment",
               params: {
-                index: index,
-                nombre: data.name,
-                descripcion: data.description,
-                ubicacion: data.location,
+                index: dataPost.id,
+                nombre: dataPost.pet.name,
+                descripcion: dataPost.pet.description,
+                ubicacion: dataPost.pet.location,
                 pet_id: id,
                 // created_at: data.created_at,
-                logo: data.logo,
+                logo: dataPost.pet.logo,
               },
             })
           }
         >
           <MessageIcon color={"#374151"} size={24} />
           <Text className="text-gray-600 font-medium text-lg">
-            {commentCount}
+            {dataPost.comments}
           </Text>
         </Pressable>
 
@@ -241,7 +292,7 @@ export function PostItem({ data, id, index, onHidePost, onReportPost }) {
           onTextLayout={onTextLayout}
           className="text-gray-800"
         >
-          {data.description}
+          {dataPost.description}
         </Text>
         {showVerMas && (
           <Text className="text-gray-500 font-light">

@@ -88,17 +88,38 @@ export function Main() {
   const [posts, setPosts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // const fetchPosts = async () => {
+  //   const { data, error } = await supabase.from("pet").select(`
+  //       *,
+  //       post (
+  //         *,
+  //         media_post (
+  //         *
+  //         )
+  //       )
+
+  //     `);
+
+  //   if (error) {
+  //     console.error("Error fetching posts:", error.message);
+  //   } else {
+  //     setPosts(data);
+  //   }
+  // };
+
   const fetchPosts = async () => {
-    const { data, error } = await supabase.from("pet").select(`
-        *,
-        post (
-          *,
-          media (
-          *
-          )
-        )
-        
-      `);
+    const { data, error } = await supabase.from("post").select(`
+    *,
+    pet (
+      *,
+      media_pet(
+        *
+      )
+    ),
+    media_post (
+      *
+    )
+  `);
 
     if (error) {
       console.error("Error fetching posts:", error.message);
@@ -140,8 +161,8 @@ export function Main() {
             refreshing={refreshing}
             renderItem={({ item, index }) => (
               <PostItem
-                data={item}
-                id={item.id}
+                dataPost={item}
+                id={item.pet.id}
                 index={index}
                 onHidePost={(i) => {
                   const updated = [...posts];

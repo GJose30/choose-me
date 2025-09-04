@@ -10,93 +10,154 @@ import {
 import { Stack, Link } from "expo-router";
 import { ProfileMetric } from "../../components/profile/ProfileMetrics";
 import { MessageIcon } from "../../components/Icon";
+import { useSupabaseUserProfile } from "../../components/HooksCustoms/useSupabaseUserProfile";
+import { supabase } from "../../lib/supabase";
+import { useState, useCallback, useEffect } from "react";
+import { useUser } from "@clerk/clerk-expo";
 
-const user = {
-  id: "123",
-  nombre: "Gil Arauz",
-  email: "gil@email.com",
-  fotoPerfil:
-    "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
-  fotoFondo:
-    "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
-  descripcion: "Amante de los animales y voluntario en refugios.",
-  mascotas: [
-    {
-      id: "m1",
-      nombre: "Rocky",
-      foto: "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
-      raza: "Labrador",
-      edad: "2 años",
-    },
-    {
-      id: "m2",
-      nombre: "Milo",
-      foto: "https://urgenciesveterinaries.com/wp-content/uploads/2023/09/survet-gato-caida-pelo-01.jpeg",
-      raza: "Beagle",
-      edad: "4 años",
-    },
-    {
-      id: "m3",
-      nombre: "Rocky",
-      foto: "https://purina.com.pa/sites/default/files/2022-11/purina-brand-cuanto-vive-un-gato-nota_03.jpg",
-      raza: "Labrador",
-      edad: "2 años",
-    },
-    {
-      id: "m4",
-      nombre: "Milo",
-      foto: "https://okdiario.com/img/2025/04/08/el-significado-de-que-tu-perro-te-chupe-los-pies-sin-parar-635x358.jpg",
-      raza: "Beagle",
-      edad: "4 años",
-    },
-    {
-      id: "m5",
-      nombre: "Rocky",
-      foto: "https://vitakraft.es/wp-content/uploads/2020/12/Blog_HistoriaPerros-1110x600.jpg",
-      raza: "Labrador",
-      edad: "2 años",
-    },
-    {
-      id: "m6",
-      nombre: "Rocky",
-      foto: "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
-      raza: "Labrador",
-      edad: "2 años",
-    },
-    {
-      id: "m7",
-      nombre: "Milo",
-      foto: "https://urgenciesveterinaries.com/wp-content/uploads/2023/09/survet-gato-caida-pelo-01.jpeg",
-      raza: "Beagle",
-      edad: "4 años",
-    },
-    {
-      id: "m8",
-      nombre: "Rocky",
-      foto: "https://purina.com.pa/sites/default/files/2022-11/purina-brand-cuanto-vive-un-gato-nota_03.jpg",
-      raza: "Labrador",
-      edad: "2 años",
-    },
-    {
-      id: "m9",
-      nombre: "Milo",
-      foto: "https://okdiario.com/img/2025/04/08/el-significado-de-que-tu-perro-te-chupe-los-pies-sin-parar-635x358.jpg",
-      raza: "Beagle",
-      edad: "4 años",
-    },
-    {
-      id: "m10",
-      nombre: "Rocky",
-      foto: "https://vitakraft.es/wp-content/uploads/2020/12/Blog_HistoriaPerros-1110x600.jpg",
-      raza: "Labrador",
-      edad: "2 años",
-    },
-  ],
-};
+// const user = {
+//   id: "123",
+//   nombre: "Gil Arauz",
+//   email: "gil@email.com",
+//   fotoPerfil:
+//     "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
+//   fotoFondo:
+//     "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
+//   descripcion: "Amante de los animales y voluntario en refugios.",
+//   mascotas: [
+//     {
+//       id: "m1",
+//       nombre: "Rocky",
+//       foto: "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
+//       raza: "Labrador",
+//       edad: "2 años",
+//     },
+//     {
+//       id: "m2",
+//       nombre: "Milo",
+//       foto: "https://urgenciesveterinaries.com/wp-content/uploads/2023/09/survet-gato-caida-pelo-01.jpeg",
+//       raza: "Beagle",
+//       edad: "4 años",
+//     },
+//     {
+//       id: "m3",
+//       nombre: "Rocky",
+//       foto: "https://purina.com.pa/sites/default/files/2022-11/purina-brand-cuanto-vive-un-gato-nota_03.jpg",
+//       raza: "Labrador",
+//       edad: "2 años",
+//     },
+//     {
+//       id: "m4",
+//       nombre: "Milo",
+//       foto: "https://okdiario.com/img/2025/04/08/el-significado-de-que-tu-perro-te-chupe-los-pies-sin-parar-635x358.jpg",
+//       raza: "Beagle",
+//       edad: "4 años",
+//     },
+//     {
+//       id: "m5",
+//       nombre: "Rocky",
+//       foto: "https://vitakraft.es/wp-content/uploads/2020/12/Blog_HistoriaPerros-1110x600.jpg",
+//       raza: "Labrador",
+//       edad: "2 años",
+//     },
+//     {
+//       id: "m6",
+//       nombre: "Rocky",
+//       foto: "https://cdn.sanity.io/images/5vm5yn1d/pro/5cb1f9400891d9da5a4926d7814bd1b89127ecba-1300x867.jpg?fm=webp&q=80",
+//       raza: "Labrador",
+//       edad: "2 años",
+//     },
+//     {
+//       id: "m7",
+//       nombre: "Milo",
+//       foto: "https://urgenciesveterinaries.com/wp-content/uploads/2023/09/survet-gato-caida-pelo-01.jpeg",
+//       raza: "Beagle",
+//       edad: "4 años",
+//     },
+//     {
+//       id: "m8",
+//       nombre: "Rocky",
+//       foto: "https://purina.com.pa/sites/default/files/2022-11/purina-brand-cuanto-vive-un-gato-nota_03.jpg",
+//       raza: "Labrador",
+//       edad: "2 años",
+//     },
+//     {
+//       id: "m9",
+//       nombre: "Milo",
+//       foto: "https://okdiario.com/img/2025/04/08/el-significado-de-que-tu-perro-te-chupe-los-pies-sin-parar-635x358.jpg",
+//       raza: "Beagle",
+//       edad: "4 años",
+//     },
+//     {
+//       id: "m10",
+//       nombre: "Rocky",
+//       foto: "https://vitakraft.es/wp-content/uploads/2020/12/Blog_HistoriaPerros-1110x600.jpg",
+//       raza: "Labrador",
+//       edad: "2 años",
+//     },
+//   ],
+// };
 
 export default function Profile() {
   const screenWidth = Dimensions.get("window").width;
   const imageSize = screenWidth / 3;
+  const { profile, loading, error } = useSupabaseUserProfile();
+  const [userData, setUserData] = useState([]);
+  const [pet, setPet] = useState([]);
+  const [post, setPost] = useState([]);
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  const fetchUser = async () => {
+    const { data, error } = await supabase
+      .from("user")
+      .select("*")
+      .eq("clerk_id", user.id); // Clerk ID;
+
+    if (error) {
+      console.error("Error fetching posts:", error.message);
+    } else {
+      setUserData(data);
+    }
+  };
+
+  const fetchPet = async () => {
+    const { data, error } = await supabase.from("pet").select(`
+      *,
+      media_pet (
+        *
+      )
+    `);
+
+    if (error) {
+      console.error("Error fetching posts:", error.message);
+    } else {
+      setPet(data);
+    }
+  };
+
+  const fetchPost = async () => {
+    const { data, error } = await supabase.from("post").select(`
+      *,
+      media_post (
+        *
+      )
+    `);
+
+    if (error) {
+      console.error("Error fetching posts:", error.message);
+    } else {
+      setPost(data);
+    }
+  };
+
+  useEffect(() => {
+    fetchUser();
+    fetchPet();
+    fetchPost();
+    // console.log(userData);
+    // console.log(user[3].pet[9].media_pet?.[0]?.source);
+    // item.media_pet?.[0]?.source;
+  }, []);
 
   return (
     <ScrollView
@@ -112,60 +173,78 @@ export default function Profile() {
       />
       <View className="relative w-full h-44">
         <Image
-          source={{ uri: user.fotoFondo }}
+          source={{ uri: userData[0]?.banner_pic }}
           className="absolute w-full h-full z-0"
           resizeMode="cover"
         />
         <View className="absolute bottom-[-48px] left-0 right-0 flex-row justify-between px-10 items-center z-10">
           <View className="top-12">
-            <ProfileMetric label="Seguidores" value="42.5k" />
+            <ProfileMetric label="Seguidores" value={userData[0]?.followers} />
           </View>
 
           {/* Foto perfil */}
           <Image
-            source={{ uri: user.fotoPerfil }}
+            source={{
+              uri: profile?.profile_pic
+                ? profile.profile_pic
+                : "https://randomuser.me/api/portraits/men/32.jpg", // Imagen por defecto si no tiene foto
+            }}
             className="w-28 h-28 rounded-full border-4 border-white"
           />
 
           {/* Seguidos */}
           <View className="top-12">
-            <ProfileMetric label="Seguidos" value="312" />
+            <ProfileMetric label="Seguidos" value={userData[0]?.following} />
           </View>
         </View>
       </View>
 
       <View className="mt-14 mx-4 items-center">
         <Text className="text-2xl font-normal text-gray-800">
-          {user.nombre}
+          {userData[0]?.username}
         </Text>
       </View>
 
       <View className="px-4 items-center mt-2">
         <Text className="text-sm text-gray-700">
-          {user.descripcion || "Este usuario aún no ha escrito una biografía."}
+          {userData[0]?.bio || "Este usuario aún no ha escrito una biografía."}
         </Text>
       </View>
 
       <View className="mt-3 flex-row justify-center items-center gap-x-3">
         <Pressable
-          onPress={() => alert(`Adoptaste a ${user.nombre}`)}
+          onPress={() => alert(`Adoptaste a ${userData[0]?.username}`)}
           className="py-[4px] px-7 bg-[#FE9B5C] flex-row rounded-full my-2 gap-x-2"
         >
           <Text className="text-white text-lg">Seguir</Text>
         </Pressable>
         <Pressable
-          onPress={() => alert(`Escribirle a ${user.nombre}`)}
+          onPress={() => alert(`Escribirle a ${userData[0]?.username}`)}
           className="p-[8px] bg-white flex-row rounded-2xl my-2 gap-x-2 shadow"
         >
           <MessageIcon color="#FE9B5C" size={19} />
         </Pressable>
       </View>
 
-      <View className="mx-4 my-2">
-        <Text className="text-lg font-medium text-gray-700">Mis Mascotas</Text>
+      <View className="flex-row">
+        <View className="mx-4 my-2">
+          <Text className="text-lg font-medium text-gray-700">
+            Mis Mascotas
+          </Text>
+        </View>
+        <Link
+          href={{
+            pathname: "createPet/createPet",
+          }}
+          asChild
+        >
+          <Pressable className="py-[4px] px-7 bg-[#FE9B5C] flex-row rounded-full my-2 gap-x-2">
+            <Text className="text-white text-lg">Crear Mascota</Text>
+          </Pressable>
+        </Link>
       </View>
       <FlatList
-        data={user.mascotas}
+        data={pet}
         keyExtractor={(item) => item.id.toString()}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -175,18 +254,18 @@ export default function Profile() {
               pathname: "indexScreens/petProfile/[id]",
               params: {
                 index: index,
-                nombre: item.nombre,
+                nombre: item.name,
               },
             }}
             asChild
           >
             <Pressable className="w-40 p-2 bg-white rounded-xl shadow-xl">
               <Image
-                source={{ uri: item.foto }}
+                source={{ uri: item.media_pet?.[0]?.source }}
                 className="w-full h-24 rounded-md"
               />
-              <Text className="font-semibold text-gray-700">{item.nombre}</Text>
-              <Text className="text-sm text-gray-500">{item.raza}</Text>
+              <Text className="font-semibold text-gray-700">{item.name}</Text>
+              <Text className="text-sm text-gray-500">{item.breed}</Text>
             </Pressable>
           </Link>
         )}
@@ -203,7 +282,7 @@ export default function Profile() {
         </Text>
       </View>
       <FlatList
-        data={user.mascotas}
+        data={post}
         keyExtractor={(item) => item.id.toString()}
         numColumns={3}
         showsVerticalScrollIndicator={false}
@@ -221,7 +300,7 @@ export default function Profile() {
             >
               <Pressable className="justify-center items-center">
                 <Image
-                  source={{ uri: item.foto }}
+                  source={{ uri: item.media_post?.[0]?.source }}
                   style={{
                     width: imageSize,
                     height: imageSize,
