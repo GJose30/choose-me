@@ -29,6 +29,15 @@ export function PostModal({
     });
   };
 
+  const handlePressSave = async () => {
+    try {
+      await onSave?.(); // 👈 la ejecutas
+      onClose?.(); // opcional: cierras el modal después
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (visible) {
       slideAnim.setValue(300);
@@ -63,9 +72,7 @@ export function PostModal({
               >
                 <Text
                   className="text-gray-800 text-center py-3 text-base font-semibold"
-                  onPress={() => {
-                    onSave(selectedPostIndex);
-                  }}
+                  onPress={() => handlePressSave()}
                 >
                   Guardar
                 </Text>

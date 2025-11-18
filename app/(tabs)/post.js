@@ -1,104 +1,113 @@
-import { useEffect, useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, Image } from "react-native";
-import { supabase } from "../../lib/supabase";
+import { useEffect, useState, useCallback, memo } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter, Stack } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { supabase } from "../../lib/supabase";
+
+// 🔹 Card de mascota (memo para performance)
+const PetCard = memo(function PetCard({ pet, onPress }) {
+  const cover = pet?.media_pet?.[0]?.source;
+
+  return (
+    <TouchableOpacity
+      className="flex-row items-center px-4 py-3 mb-3 bg-white rounded-2xl shadow-sm"
+      activeOpacity={0.9}
+      onPress={onPress}
+    >
+      <View className="w-16 h-16 rounded-full overflow-hidden bg-slate-200 mr-3">
+        {cover ? (
+          <Image
+            source={{ uri: cover }}
+            className="w-16 h-16"
+            resizeMode="cover"
+          />
+        ) : (
+          <View className="flex-1 items-center justify-center">
+            <Text className="text-slate-400 text-xs text-center">Sin foto</Text>
+          </View>
+        )}
+      </View>
+
+      <View className="flex-1">
+        <Text
+          className="text-base font-semibold text-slate-800"
+          numberOfLines={1}
+        >
+          {pet?.name ?? "Mascota sin nombre"}
+        </Text>
+        <Text className="text-xs text-slate-500 mt-1" numberOfLines={1}>
+          Toca para crearle un nuevo post
+        </Text>
+      </View>
+
+      <Text className="text-lg text-slate-400 ml-2">›</Text>
+    </TouchableOpacity>
+  );
+});
 
 export default function SelectPetScreen() {
   const [pets, setPets] = useState([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  // TODO: reemplazar por el user real (auth)
   const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
 
-  const fetchPets = async () => {
-    const { data, error } = await supabase
-      .from("pet")
-      .select(
-        `
-      *, 
-      media_pet (
-        *
-      )
-      `
-      )
-      .eq("user_id", user_id); // <- sin punto y coma antes
+  const fetchPets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("pet")
+        .select(
+          `
+            *,
+            media_pet (*)
+          `
+        )
+        .eq("user_id", user_id);
 
-    if (error) {
-      console.error("Error al obtener mascotas:", error);
-    } else {
-      setPets(data);
+      if (error) {
+        console.error("Error al obtener mascotas:", error);
+      } else {
+        setPets(data || []);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [user_id]);
 
   useEffect(() => {
     fetchPets();
-    console.log(pets);
-    // console.log("hola");
-  }, []);
+  }, [fetchPets]);
 
-  // const renderPet = ({ item }) => (
-  //   <TouchableOpacity
-  //     style={{
-  //       flexDirection: "row",
-  //       alignItems: "center",
-  //       padding: 12,
-  //       marginBottom: 10,
-  //       backgroundColor: "#f3f3f3",
-  //       borderRadius: 10,
-  //     }}
-  //     onPress={() =>
-  //       router.push({
-  //         pathname: "/post/create",
-  //         params: { pet_id: item.id },
-  //       })
-  //     }
-  //   >
-  //     <Image
-  //       source={{ uri: item.media_pet.source }}
-  //       style={{ width: 60, height: 60, borderRadius: 30, marginRight: 12 }}
-  //     />
-  //     <Text style={{ fontSize: 18, fontWeight: "600" }}>
-  //       {item.media_pet.source}
-  //     </Text>
-  //     <Text style={{ fontSize: 18, fontWeight: "600" }}>{item.name}</Text>
-  //   </TouchableOpacity>
-  // );
+  const handlePressPet = useCallback(
+    (petId) => {
+      router.push({
+        pathname: "/post/create",
+        params: { pet_id: petId },
+      });
+    },
+    [router]
+  );
 
-  const renderPet = ({ item }) => {
-    // console.log("Mascota:", item);
-    // console.log("Media_pet:", item.media_pet?.[0]?.source);
+  const renderItem = useCallback(
+    ({ item }) => (
+      <PetCard pet={item} onPress={() => handlePressPet(item.id)} />
+    ),
+    [handlePressPet]
+  );
 
-    return (
-      <TouchableOpacity
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          padding: 12,
-          marginBottom: 10,
-          backgroundColor: "#f3f3f3",
-          borderRadius: 10,
-        }}
-        onPress={() =>
-          router.push({
-            pathname: "/post/create",
-            params: { pet_id: item.id },
-          })
-        }
-      >
-        <Image
-          source={{ uri: item.media_pet?.[0]?.source }}
-          style={{ width: 60, height: 60, borderRadius: 30, marginRight: 12 }}
-        />
-        <Text style={{ fontSize: 18, fontWeight: "600" }}>
-          {item.media_pet.source}
-        </Text>
-        <Text style={{ fontSize: 18, fontWeight: "600" }}>{item.name}</Text>
-      </TouchableOpacity>
-    );
-  };
+  const keyExtractor = useCallback((item) => String(item.id), []);
 
   return (
-    <View style={{ flex: 1, padding: 20 }}>
+    <View className="flex-1 bg-slate-50">
       <Stack.Screen
         options={{
           headerTitle: "",
@@ -106,21 +115,52 @@ export default function SelectPetScreen() {
           headerShadowVisible: false,
         }}
       />
-      <Text style={{ fontSize: 20, fontWeight: "700", marginBottom: 15 }}>
-        Selecciona la mascota para el nuevo post
-      </Text>
 
-      {loading ? (
-        <Text>Cargando mascotas...</Text>
-      ) : pets.length === 0 ? (
-        <Text>No tienes mascotas registradas.</Text>
-      ) : (
-        <FlatList
-          data={pets}
-          renderItem={renderPet}
-          keyExtractor={(item) => item.id}
-        />
-      )}
+      {/* Header tipo banner */}
+      <LinearGradient
+        colors={["#f97316", "#fb923c"]}
+        className="h-36 px-5 pt-10 pb-4 rounded-b-3xl"
+      >
+        <Text className="text-white text-2xl font-bold">
+          Selecciona una mascota
+        </Text>
+        <Text className="text-white/90 text-base mt-1">
+          Elige a cuál de tus peluditos le quieres crear un nuevo post 🐾
+        </Text>
+      </LinearGradient>
+
+      {/* Contenido */}
+      <View className="flex-1 px-4 pt-4">
+        {loading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#f97316" />
+            <Text className="mt-2 text-slate-500">Cargando mascotas...</Text>
+          </View>
+        ) : pets.length === 0 ? (
+          <View className="flex-1 items-center justify-center px-6">
+            <Text className="text-lg font-semibold text-slate-700 text-center">
+              Aún no tienes mascotas registradas
+            </Text>
+            <Text className="mt-2 text-slate-500 text-center">
+              Registra una mascota primero para poder crearle posts.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={pets}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 24, paddingTop: 4 }}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            removeClippedSubviews
+            onRefresh={fetchPets}
+            refreshing={loading}
+          />
+        )}
+      </View>
     </View>
   );
 }

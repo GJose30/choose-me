@@ -5,86 +5,179 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Button,
   FlatList,
+  ActivityIndicator,
+  Dimensions,
 } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
-import { Close } from "../../components/Icon";
+import { Close, ArrowLeft } from "../../components/Icon"; // 👈 AGREGADO
 import "react-native-url-polyfill/auto";
-import { Dimensions } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
-// Función para detectar tipo MIME basado en la extensión
 const getMimeType = (uri) => {
   const extension = uri.split(".").pop().toLowerCase();
-  switch (extension) {
-    case "jpg":
-    case "jpeg":
-    case "png":
-      //   return "image/jpeg";
-      return "image";
-    case "gif":
-      //   return "image/gif";
-      return "image";
-    case "mp4":
-    case "mov":
-    case "avi":
-      //   return "video/mp4";
-      return "video";
-    default:
-      return "application/octet-stream";
-  }
+  if (["jpg", "jpeg", "png", "gif"].includes(extension)) return "image";
+  if (["mp4", "mov", "avi"].includes(extension)) return "video";
+  return "application/octet-stream";
 };
 
 export default function CreatePost() {
   const { pet_id } = useLocalSearchParams();
+  const router = useRouter();
   const screenWidth = Dimensions.get("window").width;
+
   const [description, setDescription] = useState("");
   const [mediaFiles, setMediaFiles] = useState([]);
-  const router = useRouter();
-  const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f"; // Reemplaza con el user_id real desde Clerk
+  const [isPosting, setIsPosting] = useState(false);
+
+  const [petInfo, setPetInfo] = useState(null); // 👈 INFO DE LA MASCOTA
+
+  const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
   const likes = 0;
   const comments = 0;
+  const imageSize = (screenWidth - 40) / 3;
 
-  //Comienza
+  // ========= FETCH PET INFO ==========
+  const fetchPetInfo = useCallback(async () => {
+    if (!pet_id) return;
+    const { data, error } = await supabase
+      .from("pet")
+      .select("*, media_pet(*)")
+      .eq("id", pet_id)
+      .single();
+
+    if (!error) setPetInfo(data);
+  }, [pet_id]);
+
+  useEffect(() => {
+    fetchPetInfo();
+  }, [fetchPetInfo]);
+
+  // ========= SELECT MEDIA ==========
+  const pickMedia = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images", "videos"],
+      allowsMultipleSelection: true,
+      quality: 1,
+    });
+
+    if (!result.canceled) setMediaFiles((prev) => [...prev, ...result.assets]);
+  };
+
+  const takeMedia = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images", "videos"],
+      quality: 1,
+    });
+
+    if (!result.canceled) setMediaFiles((prev) => [...prev, ...result.assets]);
+  };
+
+  const uploadToStorage = async (fileUri, fileName, mimeType) => {
+    const base64 = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    const byteArray = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+
+    return supabase.storage.from("media").upload(fileName, byteArray, {
+      contentType: mimeType,
+      upsert: false,
+    });
+  };
+
+  // ========= POST ==========
+  const handlePost = async () => {
+    if (isPosting) return;
+    if (!description.trim() && mediaFiles.length === 0) {
+      alert("Escribe algo o agrega al menos una foto/video.");
+      return;
+    }
+
+    setIsPosting(true);
+
+    try {
+      const { data: post, error: postError } = await supabase
+        .from("post")
+        .insert({
+          description,
+          pet_id,
+          user_id,
+          likes,
+          comments,
+        })
+        .select()
+        .single();
+
+      if (postError) {
+        console.error(postError);
+        setIsPosting(false);
+        return;
+      }
+
+      const postId = post.id;
+
+      // Subir media
+      for (const asset of mediaFiles) {
+        try {
+          const fileUri = asset.uri;
+          const ext = fileUri.split(".").pop();
+          const mimeType = getMimeType(fileUri);
+          const fileName = `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}.${ext}`;
+
+          const { error: storageError } = await uploadToStorage(
+            fileUri,
+            fileName,
+            mimeType
+          );
+
+          if (storageError) continue;
+
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("media").getPublicUrl(fileName);
+
+          await supabase.from("media_post").insert({
+            source: publicUrl,
+            type: mimeType.startsWith("video") ? "video" : "image",
+            post_id: postId,
+          });
+        } catch {}
+      }
+
+      router.back();
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  // ========= RENDER MEDIA ==========
   const renderMediaItem = ({ item, index }) => (
     <View
-      key={index}
-      style={
-        {
-          // width: (screenWidth - 40) / 3, // 10 (left) + 10 (right) + 10*2 entre columnas
-          // height: (screenWidth - 40) / 3,
-          // justifyContent: "space-between",
-          // marginBottom: 10,
-          // position: "relative",
-        }
-      }
+      style={{
+        width: imageSize,
+        height: imageSize,
+        marginBottom: 10,
+        marginRight: 5,
+      }}
     >
-      {/* {item.type === "image" ? ( */}
       <Image
         source={{ uri: item.uri }}
-        style={{
-          width: 100,
-          height: 100,
-          borderRadius: 10,
-        }}
+        style={{ width: "100%", height: "100%", borderRadius: 10 }}
       />
-      {/* ) : (
-        <VideoView
-          source={{ uri: item.uri }}
-          style={{
-            width: 100,
-            height: 100,
-            borderRadius: 10,
-          }}
-          useNativeControls
-          resizeMode="cover"
-          isLooping
-        />
-      )} */}
+
       <TouchableOpacity
         onPress={() =>
           setMediaFiles((prev) => prev.filter((_, i) => i !== index))
@@ -101,255 +194,135 @@ export default function CreatePost() {
           alignItems: "center",
         }}
       >
-        <Close color={"white"} size={16} />
+        <Close color="white" size={16} />
       </TouchableOpacity>
     </View>
   );
 
-  const pickMedia = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      // mediaTypes: ImagePicker.MediaTypeOptions.All,
-      mediaTypes: ["images", "videos"],
-      // allowsEditing: true,
-      allowsMultipleSelection: true,
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setMediaFiles((prev) => [...prev, ...result.assets]);
-    }
-  };
-
-  /* --------‑‑‑ 2. Tomar foto o video ‑‑‑--------- */
-  const takeMedia = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") return;
-
-    const result = await ImagePicker.launchCameraAsync({
-      // mediaTypes: ImagePicker.MediaTypeOptions.All,
-      mediaTypes: ["images", "videos"],
-      // allowsEditing: true,
-      allowsMultipleSelection: true,
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setMediaFiles((prev) => [...prev, ...result.assets]);
-    }
-  };
-
-  const uploadToStorage = async (fileUri, fileName, mimeType) => {
-    // Lee el archivo como base64
-    const base64 = await FileSystem.readAsStringAsync(fileUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Convierte base64 ➜ Uint8Array (aceptado por supabase-js)
-    const byteArray = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-
-    return supabase.storage.from("media").upload(fileName, byteArray, {
-      contentType: mimeType,
-      upsert: false,
-    });
-  };
-
-  const handlePost = async () => {
-    /* 4.1  Guarda el registro del post */
-    const { data: post, error: postError } = await supabase
-      .from("post")
-      .insert({
-        likes: likes,
-        comments: comments,
-        description: description,
-        pet_id: pet_id, // pon tu valor real
-        user_id: user_id, // pon tu valor real
-      })
-      .select()
-      .single();
-
-    if (postError || !post) {
-      console.error("Error al insertar el post", postError);
-      return;
-    }
-
-    const postId = post.id;
-
-    /* 4.2  Recorre los archivos seleccionados */
-    for (const asset of mediaFiles) {
-      try {
-        const fileUri = asset.uri;
-        const ext = fileUri.split(".").pop();
-        const mimeType = getMimeType(fileUri);
-        const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-        /* Sube a Storage */
-        const { error: storageError } = await uploadToStorage(
-          fileUri,
-          fileName,
-          mimeType
-        );
-        if (storageError) {
-          console.error("Error al subir a storage", storageError);
-          continue;
-        }
-
-        /* Obtiene URL pública */
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("media").getPublicUrl(fileName);
-
-        /* Guarda la fila en tabla `media` */
-        const type = mimeType.startsWith("video") ? "video" : "image";
-        const { error: mediaError } = await supabase.from("media_post").insert({
-          source: publicUrl,
-          type,
-          post_id: postId,
-        });
-
-        if (mediaError) {
-          console.error("Error al insertar en media", mediaError);
-        }
-      } catch (err) {
-        console.error("Error procesando archivo", err);
-      }
-    }
-
-    // router.back(); // vuelve a la pantalla anterior
-    router.back();
-  };
-
-  useEffect(() => {
-    // console.log(pet_id);
-  }, [pet_id]);
+  const petPic = petInfo?.media_pet?.[0]?.source;
 
   return (
-    <ScrollView className="flex-1 p-4 bg-white">
-      {/* <Text className="text-xl font-bold mb-2">Nuevo Post</Text> */}
-
+    <View className="flex-1 bg-slate-50">
+      {/* HEADER — ahora con ArrowLeft */}
       <Stack.Screen
         options={{
-          headerStyle: { backgroundColor: "white" },
+          headerTransparent: true,
+          headerShadowVisible: false,
           headerTitle: () => (
-            <View className="flex-row items-center">
-              {/* <Image
-                  source={{ uri: avatar || "https://via.placeholder.com/40" }}
-                  className="w-10 h-10 rounded-full mr-2"
-                /> */}
-              <Text className="text-gray-800 font-semibold text-xl">
+            <View className="justify-center">
+              <Text className="text-white text-3xl font-bold ml-10 mt-1">
                 Nuevo Post
               </Text>
+            </View>
+          ),
+          headerLeft: () => (
+            <View className="justify-center">
+              <TouchableOpacity
+                onPress={() => router.back()}
+                className="ml-2 mt-1"
+              >
+                <ArrowLeft size={34} color="white" />
+              </TouchableOpacity>
             </View>
           ),
         }}
       />
 
-      <TextInput
-        placeholder="¿Qué estás pensando?"
-        multiline
-        className="border border-gray-300 rounded p-3 mb-4"
-        style={{ minHeight: 100 }}
-        value={description}
-        onChangeText={setDescription}
-      />
-
-      <TouchableOpacity
-        onPress={pickMedia}
-        className="bg-gray-200 rounded p-2 mb-2 items-center"
+      <LinearGradient
+        colors={["#f97316", "#fb923c"]}
+        className="h-52 px-5 pt-12 pb-3 rounded-b-3xl"
       >
-        <Text>Seleccionar de galería</Text>
-      </TouchableOpacity>
+        {/* <Text className="text-white text-3xl font-bold">Nuevo Post</Text> */}
 
-      <TouchableOpacity
-        onPress={takeMedia}
-        className="bg-gray-200 rounded p-2 mb-4 items-center"
-      >
-        <Text>Tomar foto o video</Text>
-      </TouchableOpacity>
-
-      {/* <ScrollView horizontal>
-        {mediaFiles.map((file, idx) => (
-          <Image
-            key={idx}
-            source={{ uri: file.uri }}
-            style={{
-              width: 100,
-              height: 100,
-              marginRight: 10,
-              borderRadius: 10,
-            }}
-          />
-        ))}
-      </ScrollView> */}
-
-      {/* <ScrollView horizontal>
-        {mediaFiles.map((file, idx) => (
-          <View key={idx} style={{ position: "relative", marginRight: 10 }}>
+        {/* INFO DE LA MASCOTA */}
+        {petInfo && (
+          <View className="flex-row items-center mt-7">
             <Image
-              source={{ uri: file.uri }}
-              style={{
-                width: 100,
-                height: 100,
-                borderRadius: 10,
-              }}
+              source={{ uri: petPic }}
+              className="w-14 h-14 rounded-full mr-3 border-2 border-white"
             />
+            <View>
+              <Text className="text-white text-xl font-semibold">
+                {petInfo.name}
+              </Text>
+              <Text className="text-white/80 text-sm">
+                {petInfo.location ?? "Ubicación desconocida"}
+              </Text>
+            </View>
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* CONTENIDO */}
+      <ScrollView
+        className="flex-1 -mt-10 px-4"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        <View className="bg-white rounded-2xl p-4 shadow-2xl">
+          <TextInput
+            placeholder="¿Qué estás pensando?"
+            multiline
+            className="text-base text-gray-800"
+            style={{ minHeight: 100, textAlignVertical: "top" }}
+            value={description}
+            onChangeText={setDescription}
+          />
+
+          <View className="mt-4 flex-row gap-x-3">
             <TouchableOpacity
-              onPress={() =>
-                setMediaFiles((prev) => prev.filter((_, i) => i !== idx))
-              }
-              style={{
-                position: "absolute",
-                top: 5,
-                right: 5,
-                backgroundColor: "rgba(0,0,0,0.6)",
-                borderRadius: 20,
-                width: 24,
-                height: 24,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
+              onPress={pickMedia}
+              className="flex-1 bg-gray-100 rounded-xl py-3 items-center"
             >
-              
-              <Close color={"white"} size={16} />
+              <Text className="text-gray-800 font-medium">
+                Seleccionar de galería
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={takeMedia}
+              className="flex-1 bg-gray-100 rounded-xl py-3 items-center"
+            >
+              <Text className="text-gray-800 font-medium">
+                Tomar foto/video
+              </Text>
             </TouchableOpacity>
           </View>
-        ))}
-      </ScrollView> */}
 
-      {/* <FlatList
-        data={mediaFiles}
-        renderItem={renderMediaItem}
-        keyExtractor={(_, index) => index.toString()}
-        numColumns={3}
-        contentContainerStyle={{ paddingHorizontal: 10 }}
-      /> */}
+          {mediaFiles.length > 0 && (
+            <FlatList
+              data={mediaFiles}
+              renderItem={renderMediaItem}
+              keyExtractor={(_, index) => index.toString()}
+              numColumns={3}
+              scrollEnabled={false}
+              className="mt-4"
+            />
+          )}
 
-      <View
-        style={{
-          width: "100%",
-          flexDirection: "row",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-        }}
-      >
-        {mediaFiles.map((item, index) => renderMediaItem({ item, index }))}
-      </View>
+          <TouchableOpacity
+            onPress={handlePost}
+            disabled={isPosting}
+            className={`mt-5 rounded-xl py-3 items-center justify-center ${
+              isPosting ? "bg-blue-400" : "bg-blue-600"
+            }`}
+          >
+            {isPosting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-semibold text-base">
+                Publicar
+              </Text>
+            )}
+          </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={handlePost}
-        className="bg-blue-600 rounded p-3 mt-5"
-      >
-        <Text className="text-white text-center font-semibold">Publicar</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => router.back()}
-        className="mt-3 p-2 border rounded items-center"
-      >
-        <Text>Cancelar</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="mt-3 py-2 border border-gray-300 rounded-xl items-center"
+          >
+            <Text className="text-gray-700">Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }

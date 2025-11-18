@@ -1,12 +1,13 @@
 import { Text, View, Image, Pressable } from "react-native";
 import { Dots, Heart, MessageIcon, Bookmark } from "../Icon";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { PostModal } from "./PostModal";
 import { useRouter } from "expo-router";
-import { useNotifications } from "../../contexts/NotificationContext";
 import { Slider } from "./Slider";
 import { supabase } from "../../lib/supabase";
+import { DeviceEventEmitter } from "react-native";
 
+// Función auxiliar para mostrar el tiempo transcurrido
 function tiempoTranscurrido(fechaISO) {
   const fecha = new Date(fechaISO);
   const ahora = new Date();
@@ -22,160 +23,261 @@ function tiempoTranscurrido(fechaISO) {
   return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
 }
 
-export function PostItem({ dataPost, id, index, onHidePost, onReportPost }) {
+export function PostItem({
+  dataPost,
+  id,
+  index,
+  onHidePost,
+  onReportPost,
+  currentUser,
+  likedInitial,
+  bookmarkedInitial,
+}) {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
-  const lastTap = useRef(null);
-  const [likeCount, setLikeCount] = useState(0);
-  const [commentCount, setCommentCount] = useState(0);
   const [postModalVisible, setPostModalVisible] = useState(false);
-  const [bookmark, setBookmark] = useState(false);
+
+  // Estados de interacción
+  const [liked, setLiked] = useState(!!likedInitial);
+  const [likesCount, setLikesCount] = useState(dataPost.likes ?? 0);
+  const [bookmarked, setBookmarked] = useState(!!bookmarkedInitial);
+  const [commentsCount, setCommentsCount] = useState(dataPost.comments ?? 0);
   const [expanded, setExpanded] = useState(false);
   const [showVerMas, setShowVerMas] = useState(false);
-  const { addNotification } = useNotifications();
-  const [posts, setPosts] = useState([]);
-  const notificationCount = 1;
 
-  const fetchNotification = async () => {
-    const { error } = await supabase.from("notification").insert([
-      {
-        user_id: dataPost.user_id,
-        post_id: dataPost.id,
-        notification_type: "like",
-        message: "Tu mascota ha recibido un like",
-        is_read: false,
-      },
-    ]);
+  // Refs para evitar múltiples llamadas simultáneas
+  const updatingRef = useRef(false);
+  const bookmarkingRef = useRef(false);
 
-    if (error) {
-      console.error("Error al insertar la notificación:", error.message);
+  // ---------- NOTIFICACIONES ----------
+  const ensureNotification = async (thePostId) => {
+    try {
+      const recipientId = dataPost?.user_id; // dueño del post
+      const actorId = currentUser;
+
+      if (!recipientId || !actorId) return;
+
+      // ¿ya existe?
+      const { data: existing, error: selErr } = await supabase
+        .from("notification")
+        .select("id")
+        .eq("user_id", recipientId)
+        .eq("post_id", thePostId)
+        .eq("notification_type", "like")
+        .limit(1);
+
+      if (selErr) return;
+      if (existing?.length) return;
+
+      await supabase.from("notification").insert([
+        {
+          user_id: recipientId,
+          post_id: thePostId,
+          notification_type: "like",
+          message: "Tu mascota ha recibido un like",
+          is_read: false,
+        },
+      ]);
+    } catch (e) {
+      console.error("Fallo ensureNotification:", e.message);
+    }
+  };
+
+  // ---------- LIKE ----------
+  const handleTapLike = async () => {
+    if (updatingRef.current) return;
+    updatingRef.current = true;
+
+    const willLike = !liked;
+    const delta = willLike ? 1 : -1;
+
+    try {
+      setLiked(willLike);
+      setLikesCount((prev) => Math.max(0, prev + delta));
+
+      await persistLikeDelta(delta);
+      await persistUserLike(willLike);
+
+      // Notificar a Main (opcional, si lo usas)
+      DeviceEventEmitter.emit("post:likeChanged", {
+        postId: String(dataPost.id),
+        liked: willLike,
+        delta,
+      });
+
+      if (willLike) ensureNotification?.(dataPost.id);
+    } catch (e) {
+      setLiked((prev) => !prev);
+      setLikesCount((prev) => Math.max(0, prev - delta));
+      console.error("Error actualizando like:", e?.message || e);
+    } finally {
+      updatingRef.current = false;
+    }
+  };
+
+  const persistLikeDelta = async (delta) => {
+    const { data, error } = await supabase
+      .from("post")
+      .select("likes")
+      .eq("id", dataPost.id)
+      .single();
+    if (error) throw error;
+
+    const newLikes = Math.max((data?.likes ?? 0) + delta, 0);
+    const { error: upErr } = await supabase
+      .from("post")
+      .update({ likes: newLikes })
+      .eq("id", dataPost.id);
+    if (upErr) throw upErr;
+
+    return newLikes;
+  };
+
+  const persistUserLike = async (willLike) => {
+    const postId = dataPost.id;
+    const userId = currentUser;
+    if (!userId) throw new Error("currentUser no definido");
+
+    if (willLike) {
+      const { error } = await supabase
+        .from("post_likes")
+        .insert({ post_id: postId, user_id: userId });
+
+      if (error) {
+        const msg = (error.message || JSON.stringify(error)).toLowerCase();
+        if (
+          msg.includes("duplicate key") ||
+          msg.includes("unique") ||
+          msg.includes("already exists") ||
+          msg.includes("conflict")
+        )
+          return;
+        throw error;
+      }
     } else {
-      console.log("Notificación insertada correctamente:");
+      const { error } = await supabase
+        .from("post_likes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId);
+      if (error) throw error;
     }
   };
 
-  const handleDoubleTap = async () => {
+  // ---------- BOOKMARK ----------
+  const handleTapBookmark = async () => {
+    if (bookmarkingRef.current) return;
+    bookmarkingRef.current = true;
+
+    const willBookmark = !bookmarked;
+
     try {
-      if (!liked) {
-        fetchNotification();
+      setBookmarked(willBookmark);
+      await persistUserBookmark(willBookmark);
 
-        // Obtener los likes actuales
-        const { data, error } = await supabase
-          .from("post")
-          .select("likes")
-          .eq("id", dataPost.id)
-          .single();
-
-        if (error) {
-          console.error("Error obteniendo likes:", error.message);
-          return;
-        }
-
-        // Actualizar con suma o resta
-        const newLikes = data.likes + 1; // o -1
-
-        const { error: updateError } = await supabase
-          .from("post")
-          .update({ likes: newLikes })
-          .eq("id", dataPost.id);
-
-        if (updateError) {
-          console.error("Error actualizando likes:", updateError.message);
-        }
-      } else {
-        // Obtener los likes actuales
-        const { data, error } = await supabase
-          .from("post")
-          .select("likes")
-          .eq("id", dataPost.id)
-          .single();
-
-        if (error) {
-          console.error("Error obteniendo likes:", error.message);
-          return;
-        }
-
-        // Actualizar con suma o resta
-        const newLikes = data.likes - 1; // o -1
-
-        const { error: updateError } = await supabase
-          .from("post")
-          .update({ likes: newLikes })
-          .eq("id", dataPost.id);
-
-        if (updateError) {
-          console.error("Error actualizando likes:", updateError.message);
-        }
-      }
-
-      setLiked(!liked);
-    } catch (err) {
-      console.error("Error actualizando likes:", err.message);
+      DeviceEventEmitter.emit("post:bookmarkChanged", {
+        postId: String(dataPost.id),
+        bookmarked: willBookmark,
+      });
+    } catch (e) {
+      setBookmarked((prev) => !prev);
+      console.error("Error actualizando bookmark:", e?.message || e);
+    } finally {
+      bookmarkingRef.current = false;
     }
   };
 
-  const handleOneTapLike = async () => {
-    try {
-      if (!liked) {
-        fetchNotification();
+  const persistUserBookmark = async (willBookmark) => {
+    const postId = dataPost.id;
+    const userId = currentUser;
+    if (!userId) throw new Error("currentUser no definido");
 
-        // Obtener los likes actuales
-        const { data, error } = await supabase
-          .from("post")
-          .select("likes")
-          .eq("id", dataPost.id)
-          .single();
+    if (willBookmark) {
+      const { error } = await supabase
+        .from("post_bookmarks")
+        .insert({ post_id: postId, user_id: userId });
 
-        if (error) {
-          console.error("Error obteniendo likes:", error.message);
+      if (error) {
+        const msg = (error.message || JSON.stringify(error)).toLowerCase();
+        if (
+          msg.includes("duplicate key") ||
+          msg.includes("unique") ||
+          msg.includes("already exists") ||
+          msg.includes("conflict")
+        )
           return;
-        }
-
-        // Actualizar con suma o resta
-        const newLikes = data.likes + 1; // o -1
-
-        const { error: updateError } = await supabase
-          .from("post")
-          .update({ likes: newLikes })
-          .eq("id", dataPost.id);
-
-        if (updateError) {
-          console.error("Error actualizando likes:", updateError.message);
-        }
-      } else {
-        // Obtener los likes actuales
-        const { data, error } = await supabase
-          .from("post")
-          .select("likes")
-          .eq("id", dataPost.id)
-          .single();
-
-        if (error) {
-          console.error("Error obteniendo likes:", error.message);
-          return;
-        }
-
-        // Actualizar con suma o resta
-        const newLikes = data.likes - 1; // o -1
-
-        const { error: updateError } = await supabase
-          .from("post")
-          .update({ likes: newLikes })
-          .eq("id", dataPost.id);
-
-        if (updateError) {
-          console.error("Error actualizando likes:", updateError.message);
-        }
+        throw error;
       }
-
-      setLiked(!liked);
-    } catch (err) {
-      console.error("Error actualizando likes:", err.message);
+    } else {
+      const { error } = await supabase
+        .from("post_bookmarks")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId);
+      if (error) throw error;
     }
   };
 
-  const handleOneTapBookmark = () => setBookmark((prev) => !prev);
+  // ---------- EFECTOS (sincronización) ----------
+  // Sincroniza liked/bookmarked si cambian los initial props
+  useEffect(() => {
+    setLiked(!!likedInitial);
+  }, [likedInitial]);
 
+  useEffect(() => {
+    setBookmarked(!!bookmarkedInitial);
+  }, [bookmarkedInitial]);
+
+  // Asegura valores base si llegan undefined
+  useEffect(() => {
+    setLikesCount(dataPost.likes ?? 0);
+    setCommentsCount(dataPost.comments ?? 0);
+  }, [dataPost.id, dataPost.likes, dataPost.comments]);
+
+  // (A) Realtime Supabase — escucha cambios en post.comments del post actual
+  useEffect(() => {
+    if (!dataPost?.id) return;
+
+    const channel = supabase
+      .channel(`post-comments-${dataPost.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "post",
+          filter: `id=eq.${dataPost.id}`,
+        },
+        (payload) => {
+          const newVal = payload?.new?.comments;
+          if (typeof newVal === "number") {
+            setCommentsCount(newVal);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dataPost?.id]);
+
+  // (B) Evento local — actualiza al instante cuando Comment emite cambios
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(
+      "post:commentChanged",
+      ({ postId, delta, newCount }) => {
+        if (String(postId) !== String(dataPost?.id)) return;
+        setCommentsCount((prev) =>
+          typeof newCount === "number"
+            ? newCount
+            : Math.max(0, (prev ?? 0) + (delta ?? 0))
+        );
+      }
+    );
+    return () => sub.remove();
+  }, [dataPost?.id]);
+
+  // ---------- UI ----------
   const onTextLayout = (e) => {
     setShowVerMas(e.nativeEvent.lines.length > 2);
   };
@@ -187,28 +289,17 @@ export function PostItem({ dataPost, id, index, onHidePost, onReportPost }) {
       }))
     : [];
 
-  useEffect(() => {
-    // console.log(data.likes);
-    // console.log(dataPost.id);
-  }, []);
-
   return (
     <View className="my-4">
+      {/* HEADER DEL POST */}
       <View className="flex-row items-center mx-4">
         <Pressable
-          className="flex-row gap-2 justify-center items-center"
+          className="flex-row gap-2 items-center"
           onPress={() =>
             router.push({
               pathname: "indexScreens/petProfile/[id]",
               params: {
-                index: index,
-                nombre: dataPost.pet.name,
-                descripcion: dataPost.pet.description,
-                ubicacion: dataPost.pet.location,
-                profile_pic: dataPost.pet[0]?.media_pet.source,
                 pet_id: id,
-                // imagen: data.imagen,
-                // logo: data.logo,
               },
             })
           }
@@ -217,75 +308,77 @@ export function PostItem({ dataPost, id, index, onHidePost, onReportPost }) {
             className="w-10 h-10 rounded-full"
             source={{ uri: `${dataPost.pet.logo}` }}
           />
-          <View className="flex-col">
+          <View>
             <Text className="text-gray-700 font-medium">
               {dataPost.pet.name}
             </Text>
-            <Text className="text-gray-400 font-normal">
+            <Text className="text-gray-400 text-sm">
               {tiempoTranscurrido(dataPost.created_at)}
             </Text>
           </View>
         </Pressable>
+
         <Pressable
           className="ml-auto"
-          onPress={() => {
-            setPostModalVisible(true);
-          }}
+          onPress={() => setPostModalVisible(true)}
         >
-          <Dots color={"black"} size={22} />
+          <Dots color="black" size={22} />
         </Pressable>
+
         <PostModal
           visible={postModalVisible}
           onClose={() => setPostModalVisible(false)}
           selectedPostIndex={index}
-          onSave={handleOneTapBookmark}
+          onSave={handleTapBookmark}
           onHidePost={onHidePost}
           onReport={onReportPost}
         />
       </View>
+
+      {/* SLIDER */}
       <View className="mt-2">
         <Slider
           images={imagesArray}
-          onHandleDoubleTap={() => handleDoubleTap()}
+          onHandleDoubleTap={() => handleTapLike()}
         />
       </View>
+
+      {/* ACCIONES */}
       <View className="flex-row gap-3 mt-2 mx-4">
+        {/* LIKE */}
         <Pressable
-          onPress={handleOneTapLike}
+          onPress={handleTapLike}
           className="flex-row gap-1 items-center"
         >
           <Heart color={liked ? "red" : "#374151"} size={24} />
           <Text className="text-gray-600 font-medium text-lg">
-            {dataPost.likes}
-          </Text>
-        </Pressable>
-        <Pressable
-          className="flex-row gap-2 justify-center items-center"
-          onPress={() =>
-            router.push({
-              pathname: "indexScreens/comment",
-              params: {
-                index: dataPost.id,
-                nombre: dataPost.pet.name,
-                descripcion: dataPost.pet.description,
-                ubicacion: dataPost.pet.location,
-                pet_id: id,
-                // created_at: data.created_at,
-                logo: dataPost.pet.logo,
-              },
-            })
-          }
-        >
-          <MessageIcon color={"#374151"} size={24} />
-          <Text className="text-gray-600 font-medium text-lg">
-            {dataPost.comments}
+            {likesCount}
           </Text>
         </Pressable>
 
-        <Pressable onPress={handleOneTapBookmark} className="ml-auto">
-          <Bookmark color={bookmark ? "orange" : "#374151"} size={24} />
+        {/* COMENTARIOS */}
+        <Pressable
+          className="flex-row gap-2 items-center"
+          onPress={() =>
+            router.push({
+              pathname: "indexScreens/comment",
+              params: { index: dataPost.id }, // 👈 solo el id del post
+            })
+          }
+        >
+          <MessageIcon color="#374151" size={24} />
+          <Text className="text-gray-600 font-medium text-lg">
+            {commentsCount}
+          </Text>
+        </Pressable>
+
+        {/* BOOKMARK */}
+        <Pressable onPress={handleTapBookmark} className="ml-auto">
+          <Bookmark color={bookmarked ? "orange" : "#374151"} size={24} />
         </Pressable>
       </View>
+
+      {/* DESCRIPCIÓN */}
       <Pressable onPress={() => setExpanded(!expanded)} className="mt-2 mx-4">
         <Text
           numberOfLines={expanded ? undefined : 2}

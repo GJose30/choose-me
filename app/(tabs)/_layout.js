@@ -1,5 +1,6 @@
-import { Tabs, Link } from "expo-router";
-import { useState, useMemo } from "react";
+import { Tabs, Link, useFocusEffect } from "expo-router";
+import { useState, useEffect, useCallback } from "react";
+import { View, Image, Pressable, Text } from "react-native";
 import {
   Home,
   Paw,
@@ -9,29 +10,111 @@ import {
   NotificationIcon,
   Plus,
 } from "../../components/Icon";
-import { View, Image, Pressable } from "react-native";
 import "../../global.css";
 import { SideBarModal } from "../../components/Index/SideBarModal";
+import { useUser } from "@clerk/clerk-expo";
+import { supabase } from "../../lib/supabase";
 
 export default function TabsLayout() {
   const [sideBarModarVisible, setSideBarModarVisible] = useState(false);
-  // const headerLeft = useMemo(() => () => <DrawerButton />, []);
-  const DrawerButton = () => {
-    return (
-      <View>
-        <Pressable
-          onPress={() => setSideBarModarVisible(true)}
-          style={{ marginLeft: 16 }}
-        >
-          <Menu color={"#374151"} size={24} />
-        </Pressable>
-        <SideBarModal
-          visible={sideBarModarVisible}
-          onClose={() => setSideBarModarVisible(false)}
-        />
-      </View>
-    );
-  };
+
+  // --- badge state ---
+  const [supaUserId, setSupaUserId] = useState(null);
+  const [notifCount, setNotifCount] = useState(0);
+
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  // 1) Resolver usuario de Supabase por clerk_id
+  const fetchSupaUserId = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) return;
+    const { data, error } = await supabase
+      .from("user")
+      .select("id")
+      .eq("clerk_id", user.id)
+      .single();
+    if (!error && data?.id) setSupaUserId(data.id);
+  }, [isLoaded, isSignedIn, user?.id]);
+
+  // 2) Contar notificaciones no leídas
+  const fetchNotifCount = useCallback(async () => {
+    if (!supaUserId) return;
+    const { count, error } = await supabase
+      .from("notification")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", supaUserId)
+      .eq("is_read", false);
+    if (!error && typeof count === "number") setNotifCount(count);
+  }, [supaUserId]);
+
+  useEffect(() => {
+    fetchSupaUserId();
+  }, [fetchSupaUserId]);
+
+  // 3) Suscripción en tiempo real a notification
+  useEffect(() => {
+    if (!supaUserId) return;
+
+    fetchNotifCount();
+
+    const channel = supabase
+      .channel("notification-badge")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notification",
+          filter: `user_id=eq.${supaUserId}`,
+        },
+        () => fetchNotifCount()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supaUserId, fetchNotifCount]);
+
+  // Refrescar al recuperar foco
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifCount();
+    }, [fetchNotifCount])
+  );
+
+  const DrawerButton = () => (
+    <View>
+      <Pressable onPress={() => setSideBarModarVisible(true)} className="ml-4">
+        <Menu color={"#374151"} size={24} />
+      </Pressable>
+      <SideBarModal
+        visible={sideBarModarVisible}
+        onClose={() => setSideBarModarVisible(false)}
+      />
+    </View>
+  );
+
+  const BellWithBadge = () => (
+    <Link href={{ pathname: "/indexScreens/notification" }} asChild>
+      <Pressable className="relative">
+        <NotificationIcon color={"#374151"} size={24} />
+        {notifCount > 0 && (
+          <View className="absolute -top-1.5 -right-1.5 bg-red-500 h-4 min-w-[16px] rounded-full px-1 items-center justify-center">
+            <Text className="text-white text-[10px] font-bold">
+              {notifCount > 99 ? "99+" : notifCount}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+    </Link>
+  );
+
+  const TabIconBox = ({ children }) => (
+    <View className="items-center justify-center top-1 h-[38px] w-[38px]">
+      {children}
+    </View>
+  );
+
   return (
     <Tabs
       initialRouteName="index"
@@ -43,12 +126,8 @@ export default function TabsLayout() {
           borderTopRightRadius: 5,
           height: 50,
         },
-        tabBarItemStyle: {
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-        },
+        tabBarItemStyle: { height: 60 },
+        tabBarLabelStyle: { fontSize: 10 },
       }}
     >
       <Tabs.Screen
@@ -58,187 +137,78 @@ export default function TabsLayout() {
           title: "",
           headerStyle: { backgroundColor: "white", height: 50 },
           headerLeft: () => <DrawerButton />,
-          // headerLeft,
           headerRight: () => (
-            <View className="flex-row gap-5 justify-center items-center mr-4">
-              <Link
-                href={{
-                  pathname: "/indexScreens/notification",
-                }}
-                asChild
-              >
-                <Pressable>
-                  <NotificationIcon color={"#374151"} size={24} />
-                </Pressable>
-              </Link>
-              <Link
-                href={{
-                  pathname: "/indexScreens/search",
-                }}
-                asChild
-              >
+            <View className="flex-row gap-5 items-center mr-4">
+              <BellWithBadge />
+              <Link href={{ pathname: "/indexScreens/search" }} asChild>
                 <Pressable>
                   <SearchIcon color={"#374151"} size={24} />
                 </Pressable>
               </Link>
             </View>
           ),
-          tabBarIcon: ({ color }) => (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                top: 4,
-                height: 38,
-                width: 38,
-              }}
-            >
+          tabBarIcon: () => (
+            <TabIconBox>
               <Home color={"white"} size={24} />
-            </View>
+            </TabIconBox>
           ),
         }}
       />
+
       <Tabs.Screen
         name="adoption"
         options={{
-          // headerTitle: "",
-          // title: "",
-          // headerStyle: { backgroundColor: "#FE9B5C" },
-          // tabBarIcon: ({ color }) => (
-          //   <View
-          //     style={{
-          //       alignItems: "center",
-          //       justifyContent: "center",
-          //       top: 4,
-          //       height: 38,
-          //       width: 38,
-          //     }}
-          //   >
-          //     <Paw color={"white"} size={24} />
-          //   </View>
-          // ),
-          // headerTitle: "Adopcion",
           headerTitle: "",
           title: "",
-          // headerStyle: { backgroundColor: "white", height: 50 },
-          // headerLeft: () => <View></View>,
-          // headerLeft,
-          // headerRight: () => (
-          //   <View className="flex-row gap-5 justify-center items-center mr-4">
-          //     {/* <Link
-          //       href={{
-          //         // pathname: "/indexScreens/notification",
-          //       }}
-          //       asChild
-          //     > */}
-          //     <Pressable>
-          //       <Heart color={"#374151"} size={24} />
-          //     </Pressable>
-          //     {/* </Link> */}
-          //     <Link
-          //       href={{
-          //         pathname: "/indexScreens/search",
-          //       }}
-          //       asChild
-          //     >
-          //       <Pressable>
-          //         <SearchIcon color={"#374151"} size={24} />
-          //       </Pressable>
-          //     </Link>
-          //   </View>
-          // ),
-          tabBarIcon: ({ color }) => (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                top: 4,
-                height: 38,
-                width: 38,
-              }}
-            >
+          tabBarIcon: () => (
+            <TabIconBox>
               <Paw color={"white"} size={24} />
-            </View>
+            </TabIconBox>
           ),
         }}
       />
+
       <Tabs.Screen
         name="post"
         options={{
           headerTitle: "",
           title: "",
-          // headerStyle: { backgroundColor: "#FE9B5C" },
-          // tabBarIcon: ({ color }) => (
-          //   <View
-          //     style={{
-          //       alignItems: "center",
-          //       justifyContent: "center",
-          //       top: 4,
-          //       height: 50,
-          //       width: 50,
-          //     }}
-          //   >
-          //     <Plus color={"white"} size={37} />
-          //   </View>
-          // ),
-          tabBarIcon: ({ color }) => (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                top: 4,
-                height: 38,
-                width: 38,
-              }}
-            >
+          tabBarIcon: () => (
+            <TabIconBox>
               <Plus color={"white"} size={34} />
-            </View>
+            </TabIconBox>
           ),
         }}
       />
+
       <Tabs.Screen
         name="chat"
         options={{
           headerTitle: "",
           title: "",
           headerStyle: { backgroundColor: "#FE9B5C" },
-          tabBarIcon: ({ color }) => (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                top: 4,
-                height: 38,
-                width: 38,
-              }}
-            >
+          tabBarIcon: () => (
+            <TabIconBox>
               <MessageIcon color={"white"} size={24} />
-            </View>
+            </TabIconBox>
           ),
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
           headerTitle: "",
           title: "",
-          tabBarIcon: ({ color }) => (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                top: 4,
-                height: 38,
-                width: 38,
-              }}
-            >
+          tabBarIcon: () => (
+            <TabIconBox>
               <Image
                 className="h-8 w-8 rounded-full"
                 source={{
                   uri: "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
                 }}
               />
-            </View>
+            </TabIconBox>
           ),
         }}
       />

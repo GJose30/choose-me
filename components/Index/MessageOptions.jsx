@@ -6,6 +6,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Animated,
+  Pressable,
 } from "react-native";
 import { useEffect, useRef } from "react";
 
@@ -13,6 +14,7 @@ export function MessageOptions({
   visible,
   onClose,
   selectedCommentIndex,
+  selectedCommentId,
   onDelete,
   onReport,
 }) {
@@ -60,7 +62,7 @@ export function MessageOptions({
                 }}
                 className="bg-white rounded-t-2xl p-4"
               >
-                <Text
+                {/* <Text
                   className="text-gray-800 text-center py-3 text-base font-semibold"
                   onPress={() => {
                     onDelete(selectedCommentIndex);
@@ -68,7 +70,18 @@ export function MessageOptions({
                   }}
                 >
                   Eliminar
-                </Text>
+                </Text> */}
+                <Pressable
+                  onPress={() => {
+                    onClose?.();
+                    onDelete?.(selectedCommentId); // 👈 dispara la eliminación con el id
+                  }}
+                  // className="py-3"
+                >
+                  <Text className="text-gray-800 text-center py-3 text-base font-semibold">
+                    Eliminar
+                  </Text>
+                </Pressable>
                 <Text
                   className="text-red-600 text-center py-3 text-base font-semibold"
                   onPress={() => {

@@ -1,21 +1,32 @@
 import { View, TextInput, Pressable } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
+/**
+ * Barra de búsqueda reutilizable
+ * - onSearch: callback (texto) que se dispara al escribir o confirmar
+ * - onClear: callback que se dispara al limpiar
+ * - delay: ms de debounce para no disparar onSearch en cada tecla
+ */
 export default function SearchBar({
   placeholder = "Buscar...",
   onSearch,
   onClear,
+  delay = 200, // pequeño debounce local (evita spam al escribir)
 }) {
   const [text, setText] = useState("");
 
+  // 🔁 Pequeño debounce interno
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onSearch?.(text.trim());
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [text]);
+
   const handleClear = () => {
     setText("");
-    if (onClear) onClear();
-  };
-
-  const handleSearch = (value) => {
-    if (onSearch) onSearch(value);
+    onClear?.();
   };
 
   return (
@@ -27,7 +38,7 @@ export default function SearchBar({
         borderRadius: 10,
         paddingHorizontal: 12,
         height: 40,
-        margin: 12,
+        margin: 8,
       }}
     >
       <Ionicons
@@ -38,14 +49,14 @@ export default function SearchBar({
       />
       <TextInput
         value={text}
-        onChangeText={(value) => {
-          setText(value);
-          handleSearch(value);
-        }}
-        onSubmitEditing={() => handleSearch(text)}
+        onChangeText={setText}
         placeholder={placeholder}
-        style={{ flex: 1, fontSize: 16 }}
         placeholderTextColor="#888"
+        style={{
+          flex: 1,
+          fontSize: 15,
+          color: "#333",
+        }}
         returnKeyType="search"
       />
       {text.length > 0 && (

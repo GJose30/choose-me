@@ -1,168 +1,215 @@
-import React, { useState, useEffect } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
   FlatList,
   Image,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
-import { Stack } from "expo-router";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
+import { useUser } from "@clerk/clerk-expo";
 import { supabase } from "../../lib/supabase";
 
-// const likedPets = [
-//   {
-//     id: 1,
-//     name: "Luna",
-//     age: 3,
-//     location: "Ciudad de Panamá",
-//     image:
-//       "https://cdn.pixabay.com/photo/2016/02/19/11/19/dog-1207816_1280.jpg",
-//   },
-//   {
-//     id: 2,
-//     name: "Max",
-//     age: 5,
-//     location: "David, Chiriquí",
-//     image:
-//       "https://cdn.pixabay.com/photo/2017/09/25/13/12/dog-2785074_1280.jpg",
-//   },
-//   {
-//     id: 3,
-//     name: "Bella",
-//     age: 2,
-//     location: "Colón",
-//     image: "https://cdn.pixabay.com/photo/2015/03/26/09/54/dog-690176_1280.jpg",
-//   },
-//   {
-//     id: 4,
-//     name: "Rocky",
-//     age: 4,
-//     location: "Santiago, Veraguas",
-//     image:
-//       "https://cdn.pixabay.com/photo/2017/11/30/18/17/dog-2982426_1280.jpg",
-//   },
-// ];
+/* ======================= Card (memo) ======================= */
+const AdoptionLikeCard = React.memo(function AdoptionLikeCard({
+  item,
+  cardWidth,
+  onPress,
+}) {
+  return (
+    <Pressable
+      className="bg-white rounded-2xl shadow-md m-2 overflow-hidden"
+      onPress={onPress}
+      style={{ width: cardWidth }}
+    >
+      {item.image ? (
+        <Image
+          source={{ uri: item.image }}
+          style={{ width: "100%", height: 120 }}
+          resizeMode="cover"
+        />
+      ) : (
+        <View
+          style={{ width: "100%", height: 120 }}
+          className="bg-gray-200 items-center justify-center"
+        >
+          <Text className="text-gray-500 text-xs">Sin foto</Text>
+        </View>
+      )}
+      <View className="p-3">
+        <Text className="text-lg font-semibold text-gray-700" numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text className="text-sm text-gray-600" numberOfLines={1}>
+          {item.age} años
+        </Text>
+        <Text className="text-sm text-gray-400" numberOfLines={1}>
+          {item.location}
+        </Text>
+      </View>
+    </Pressable>
+  );
+});
 
+/* ======================= Pantalla ======================= */
 export default function AdoptionLikes() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+
+  // Clerk (usuario autenticado)
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  // Usuario de tu app en Supabase (fila en tabla "user")
+  const [supaUser, setSupaUser] = useState(null);
+  const [userLoading, setUserLoading] = useState(false);
+
+  // layout estable
+  const CARD_GAP = 24;
+  const cardWidth = useMemo(() => Math.floor(width / 2) - CARD_GAP, [width]);
+
   const [adoptionPet, setAdoptionPet] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const reqId = useRef(0);
 
-  // const fetchAdoptionPetLikes = async () => {
-  // const { data, error } = await supabase.from("pet").select(`
-  //     *,
-  //     post (
-  //       *,
-  //       media (
-  //       *
-  //       )
-  //     )
+  const getAge = useCallback((birthdateStr) => {
+    if (!birthdateStr) return "N/A";
+    const today = new Date();
+    const birth = new Date(birthdateStr);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age < 0 || isNaN(age) ? "N/A" : age;
+  }, []);
 
-  //   `);
+  // 1) Traer el usuario de Supabase por clerk_id (igual que en Main)
+  const fetchSupaUser = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) return;
+    setUserLoading(true);
+    try {
+      const clerkId = user.id;
+      const { data, error } = await supabase
+        .from("user")
+        .select("id, username, profile_pic, clerk_id")
+        .eq("clerk_id", clerkId)
+        .single();
 
-  // if (error) {
-  //   console.error("Error fetching posts:", error.message);
-  // } else {
-  //   setPosts(data);
-  // }
-  //   const { data, error } = await supabase
-  //     .from("adoption_likes_pet")
-  //     .select("*");
-  //   if (error) {
-  //     console.error("Error al obtener likes:", error.message);
-  //   } else {
-  //     setAdoptionPet(data);
-  //   }
-  // };
+      if (error) throw error;
+      setSupaUser(data);
+    } catch (err) {
+      console.error("Supabase user error:", err?.message);
+    } finally {
+      setUserLoading(false);
+    }
+  }, [isLoaded, isSignedIn, user?.id]);
 
-  const fetchAdoptionPetLikes = async () => {
-    const userId = "5c16bcb5-489c-465e-8f42-186c6fe9061f"; // usuario fijo
+  useEffect(() => {
+    fetchSupaUser();
+  }, [fetchSupaUser]);
+
+  // 2) Con el supaUser.id, traer los likes
+  const fetchAdoptionPetLikes = useCallback(async () => {
+    if (!supaUser?.id) return;
+    setLoading(true);
+    const id = ++reqId.current;
 
     const { data, error } = await supabase
       .from("adoption_likes_pet")
       .select(
         `
         adoption_pet (
-          *,
-          media_adoption_pet (
-            *
-          )
+          id, name, birthdate, location, description,
+          media_adoption_pet ( source, type )
         )
       `
       )
-      .eq("user_id", userId);
+      .eq("user_id", supaUser.id);
 
     if (error) {
       console.error("Error al obtener mascotas con like:", error.message);
-    } else {
-      const petsWithLikes = data.map((like) => {
-        const pet = like.adoption_pet;
-        const image =
-          pet.media_adoption_pet?.find((m) => m.type === "image")?.source || "";
-        const birthdate = pet.birthdate ? new Date(pet.birthdate) : null;
-        const today = new Date();
-        const age = birthdate
-          ? today.getFullYear() -
-            birthdate.getFullYear() -
-            (today <
-            new Date(
-              today.getFullYear(),
-              birthdate.getMonth(),
-              birthdate.getDate()
-            )
-              ? 1
-              : 0)
-          : "N/A";
-
-        return {
-          id: pet.id,
-          name: pet.name,
-          age: age,
-          location: pet.location,
-          description: pet.description,
-          image: image,
-        };
-      });
-
-      setAdoptionPet(petsWithLikes);
+      setLoading(false);
+      return;
     }
-  };
+    if (id !== reqId.current) {
+      // llegó una respuesta vieja
+      setLoading(false);
+      return;
+    }
+
+    // Map -> 1 tarjeta por mascota (dedup por seguridad)
+    const seen = new Set();
+    const pets = [];
+    for (const like of data ?? []) {
+      const pet = like.adoption_pet;
+      const petId = String(pet?.id ?? "");
+      if (!petId || seen.has(petId)) continue;
+      seen.add(petId);
+
+      const image =
+        pet?.media_adoption_pet?.find((m) => m?.type === "image")?.source ||
+        pet?.media_adoption_pet?.[0]?.source ||
+        "";
+
+      pets.push({
+        id: petId,
+        name: pet?.name ?? "",
+        age: getAge(pet?.birthdate),
+        location: pet?.location ?? "",
+        description: pet?.description ?? "",
+        image,
+      });
+    }
+
+    setAdoptionPet(pets);
+    setLoading(false);
+  }, [supaUser?.id, getAge]);
 
   useEffect(() => {
     fetchAdoptionPetLikes();
-    console.log(adoptionPet);
-  }, []);
+  }, [fetchAdoptionPetLikes]);
 
-  const renderCard = ({ item }) => (
-    <Pressable
-      className="bg-white rounded-2xl shadow-md m-2 overflow-hidden"
-      onPress={() =>
-        router.push({
-          pathname: "indexScreens/adoptionPetProfile/[id]",
-          params: {
-            // index: index,
-            nombre: item.name,
-            descripcion: item.description,
-            ubicacion: item.location,
-            adoption_pet_id: item.id,
-          },
-        })
-      }
-      style={{ width: Dimensions.get("window").width / 2 - 24 }}
-    >
-      <Image
-        source={{ uri: item.image }}
-        style={{ width: "100%", height: 120 }}
-        resizeMode="cover"
+  const keyExtractor = useCallback((item) => String(item.id), []);
+
+  const renderItem = useCallback(
+    ({ item }) => (
+      <AdoptionLikeCard
+        item={item}
+        cardWidth={cardWidth}
+        onPress={() =>
+          router.push({
+            pathname: "indexScreens/adoptionPetProfile/[id]",
+            params: {
+              adoption_pet_id: String(item.id),
+            },
+          })
+        }
       />
-      <View className="p-3">
-        <Text className="text-lg font-semibold text-gray-700">{item.name}</Text>
-        <Text className="text-sm text-gray-600">{item.age} años</Text>
-        <Text className="text-sm text-gray-400">{item.location}</Text>
-      </View>
-    </Pressable>
+    ),
+    [router, cardWidth]
   );
+
+  if (!isLoaded || userLoading) {
+    return (
+      <View className="flex-1 items-center justify-center">
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (isLoaded && !isSignedIn) {
+    return (
+      <View className="flex-1 items-center justify-center">
+        <Text className="text-gray-500">Inicia sesión para ver tus likes.</Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-gray-100 p-2">
@@ -172,20 +219,34 @@ export default function AdoptionLikes() {
           headerTransparent: false,
         }}
       />
-      {/* <FlatList
-        data={likedPets}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderCard}
-        numColumns={2}
-        contentContainerStyle={{ paddingBottom: 20 }}
-      /> */}
-      <FlatList
-        data={adoptionPet} // antes era likedPets
-        keyExtractor={(item) => item.id}
-        renderItem={renderCard}
-        numColumns={2}
-        contentContainerStyle={{ paddingBottom: 20 }}
-      />
+
+      {loading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator />
+        </View>
+      ) : (
+        <FlatList
+          data={adoptionPet}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          numColumns={2}
+          // rendimiento
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          updateCellsBatchingPeriod={16}
+          removeClippedSubviews
+          // padding y espacio
+          contentContainerStyle={{ paddingBottom: 20 }}
+          ListEmptyComponent={
+            <View className="items-center justify-center py-16">
+              <Text className="text-gray-500">
+                Aún no has dado like a mascotas.
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }

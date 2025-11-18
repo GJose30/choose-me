@@ -1,127 +1,247 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Image, Dimensions, Pressable } from "react-native";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
+import {
+  View,
+  Text,
+  Image,
+  Pressable,
+  ScrollView,
+  RefreshControl,
+  useWindowDimensions,
+} from "react-native";
 import Swiper from "react-native-deck-swiper";
 import { supabase } from "../../lib/supabase";
-import { Stack, Link, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { Heart, Close, Paw, Info } from "../../components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 
+/** ---------- Tarjeta de adopción (memo) ---------- */
+const AdoptionCard = React.memo(function AdoptionCard({
+  item,
+  getAge,
+  onInfoPress,
+  onOwnerPress,
+}) {
+  const cover = item?.media_adoption_pet?.[0]?.source;
+  const owner = item?.user;
+  const ownerName = owner?.username || "Dueño desconocido";
+  const { width, height } = useWindowDimensions();
+  const cardWidth = useMemo(() => width - 32, [width]);
+  const cardHeight = useMemo(() => Math.floor(height * 0.5), [height]);
+  const ownerPic =
+    owner?.profile_pic ||
+    "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg";
+
+  return (
+    <View className="gap-3">
+      {/* Tarjeta principal */}
+      <View
+        className="bg-white rounded-3xl overflow-hidden shadow-xl self-center"
+        style={{
+          width: cardWidth,
+          height: cardHeight,
+          alignSelf: "center",
+          elevation: 6,
+        }}
+      >
+        {!!cover && (
+          <Image
+            source={{ uri: cover }}
+            className="w-full h-[350px]"
+            resizeMode="cover"
+          />
+        )}
+
+        <View className="flex-row px-4 py-3">
+          <View className="flex-1 pr-4">
+            <Text
+              className="text-xl font-semibold text-gray-700"
+              numberOfLines={1}
+            >
+              {item?.name ?? ""}
+            </Text>
+
+            {!!item?.birthdate && (
+              <Text className="text-base text-gray-600" numberOfLines={1}>
+                {getAge(item.birthdate)} años
+              </Text>
+            )}
+
+            <Text className="text-base text-gray-400" numberOfLines={1}>
+              {item?.location ?? ""}
+            </Text>
+          </View>
+
+          <Pressable
+            className="ml-auto items-center justify-center p-1"
+            onPress={() => onInfoPress?.(item?.id)}
+            hitSlop={10}
+          >
+            <Info color="#6b7280" size={30} />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Tarjeta secundaria: likes + dueño */}
+      <View
+        className="bg-white rounded-3xl flex-row justify-between items-center px-3 py-3 shadow-lg w-11/12 self-center"
+        style={{
+          width: cardWidth,
+          // height: cardHeight,
+          alignSelf: "center",
+          elevation: 6,
+        }}
+      >
+        <View className="rounded-full px-3 border border-red-400 items-center justify-center">
+          <Text className="text-lg font-semibold text-red-400">
+            {(item?.likes ?? 0) + " Likes"}
+          </Text>
+        </View>
+
+        <Pressable
+          className="flex-row items-center justify-center gap-x-2"
+          onPress={() => owner?.id && onOwnerPress?.(owner.id)}
+          hitSlop={10}
+        >
+          <Text
+            className="text-xl text-gray-600 font-semibold"
+            numberOfLines={1}
+          >
+            {ownerName}
+          </Text>
+          <Image
+            source={{ uri: ownerPic }}
+            className="w-12 h-12 rounded-full ring-4 ring-white shadow-md"
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
+});
+
 export default function Adoption() {
+  const router = useRouter();
+
   const [adoptionPet, setAdoptionPet] = useState([]);
   const [index, setIndex] = useState(0);
-  const screenWidth = Dimensions.get("window").width;
-  const screenHeight = Dimensions.get("window").height;
   const swiperRef = useRef(null);
+
   const [swipeMessage, setSwipeMessage] = useState("");
+  const swipeMessageRef = useRef("");
   const [canSwipe, setCanSwipe] = useState(true);
   const isManualSwipe = useRef(false);
 
-  // const handleSwipe = (direction) => {
-  //   if (!canSwipe) return;
+  const [refreshing, setRefreshing] = useState(false);
 
-  //   setSwipeMessage(direction === "right" ? "¡Lo quiero!" : "No me interesa");
-  //   isManualSwipe.current = true;
-  //   setCanSwipe(false);
-
-  //   setTimeout(() => {
-  //     if (direction === "right") {
-  //       swiperRef.current?.swipeRight();
-  //     } else {
-  //       swiperRef.current?.swipeLeft();
-  //     }
-  //   }, 200);
-
-  //   setTimeout(() => {
-  //     setSwipeMessage("");
-  //     setCanSwipe(true);
-  //     isManualSwipe.current = false;
-  //   }, 1000);
-  // };
-
-  const fetchAdoptionPet = async () => {
-    const { data, error } = await supabase.from("adoption_pet").select(`
-      *,
-      media_adoption_pet(
-        *
-      )
-    `);
-    if (error) {
-      console.error("Error fetching media:", error.message);
-    } else {
-      // Filtrar mascotas que tengan al menos una imagen en media_adoption_pet
-      // const imageData = data.filter((item) =>
-      //   item.media_pet?.some((media) => media.type === "image")
-      // );
-      setAdoptionPet(data);
-    }
-  };
-
-  const handleSwipe = async (direction) => {
-    if (!canSwipe) return;
-
-    setSwipeMessage(direction === "right" ? "¡Lo quiero!" : "No me interesa");
-    isManualSwipe.current = true;
-    setCanSwipe(false);
-
-    // 👇 Hacer insert si es swipe derecho desde botón
-    if (direction === "right" && adoptionPet[index]) {
-      const adoption_pet_id = adoptionPet[index].id;
-      const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
-
-      const { error } = await supabase
-        .from("adoption_likes_pet")
-        .insert([{ adoption_pet_id, user_id }]);
-
-      if (error) {
-        console.error("Error insertando like desde botón:", error.message);
-      } else {
-        console.log("Like insertado desde botón");
-      }
-    }
-
-    // Ejecutar swipe visual
-    setTimeout(() => {
-      if (direction === "right") {
-        swiperRef.current?.swipeRight();
-      } else {
-        swiperRef.current?.swipeLeft();
-      }
-    }, 200);
-
-    setTimeout(() => {
-      setSwipeMessage("");
-      setCanSwipe(true);
-      isManualSwipe.current = false;
-    }, 1000);
-  };
-
-  const getAge = (birthDate) => {
+  // Edad
+  const getAge = useCallback((birthDate) => {
     const today = new Date();
     const birth = new Date(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
     const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
     return age;
-  };
+  }, []);
 
-  useEffect(() => {
-    fetchAdoptionPet();
-    console.log(adoptionPet);
+  // Fetch con dueño incluido
+  const fetchAdoptionPet = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("adoption_pet")
+      .select(
+        `
+        id, name, birthdate, location, likes, user_id,
+        media_adoption_pet ( source ),
+        user: user_id ( id, username, profile_pic )
+      `
+      )
+      .order("created_at", { ascending: false });
+
+    if (!error) setAdoptionPet(data ?? []);
   }, []);
 
   useEffect(() => {
-    if (swipeMessage !== "") {
-      const timeout = setTimeout(() => {
-        setSwipeMessage("");
-      }, 1000);
-      return () => clearTimeout(timeout);
+    fetchAdoptionPet();
+  }, [fetchAdoptionPet]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchAdoptionPet();
+      setIndex(0);
+      swiperRef.current?.jumpToCardIndex?.(0);
+    } finally {
+      setRefreshing(false);
     }
-  }, [swipeMessage]);
+  }, [fetchAdoptionPet]);
+
+  // Señal “Lo quiero / No me interesa”
+  const handleSwiping = useCallback((x) => {
+    const next = x < -50 ? "No me interesa" : x > 50 ? "¡Lo quiero!" : "";
+    if (swipeMessageRef.current !== next) {
+      swipeMessageRef.current = next;
+      setSwipeMessage(next);
+    }
+  }, []);
+
+  const handleSwipe = useCallback(
+    async (direction) => {
+      if (!canSwipe) return;
+
+      const msg = direction === "right" ? "¡Lo quiero!" : "No me interesa";
+      setSwipeMessage(msg);
+      swipeMessageRef.current = msg;
+      isManualSwipe.current = true;
+      setCanSwipe(false);
+
+      setTimeout(() => {
+        if (direction === "right") swiperRef.current?.swipeRight();
+        else swiperRef.current?.swipeLeft();
+      }, 120);
+
+      setTimeout(() => {
+        setSwipeMessage("");
+        swipeMessageRef.current = "";
+        setCanSwipe(true);
+        isManualSwipe.current = false;
+      }, 700);
+    },
+    [canSwipe]
+  );
+
+  // Navegaciones
+  const goToAdoptionProfile = useCallback(
+    (adoptionId) => {
+      if (!adoptionId) return;
+      router.push({
+        pathname: "indexScreens/adoptionPetProfile/[id]",
+        params: { adoption_pet_id: String(adoptionId) },
+      });
+    },
+    [router]
+  );
+
+  const goToOwnerProfile = useCallback(
+    (ownerId) => {
+      if (!ownerId) return;
+      router.push({
+        pathname: "indexScreens/profile/[id]",
+        params: { index: String(ownerId) },
+      });
+    },
+    [router]
+  );
+
+  const swipeBgClass =
+    swipeMessage === "¡Lo quiero!" ? "bg-emerald-400" : "bg-red-400";
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-white">
+      {/* Header nativo */}
       <Stack.Screen
         options={{
           headerTitle: "",
@@ -129,261 +249,131 @@ export default function Adoption() {
           headerShadowVisible: false,
         }}
       />
-      <LinearGradient
-        colors={["#f97316", "#facc15"]}
-        className="pt-8 h-52 px-4"
-        style={{
-          borderBottomLeftRadius: 40,
-          borderBottomRightRadius: 40,
-        }}
+
+      {/* Gradient naranja con borde redondeado abajo */}
+      <View className="absolute top-0 left-0 right-0 h-52 rounded-b-3xl overflow-hidden">
+        <LinearGradient
+          colors={["#f97316", "#facc15"]}
+          className="w-full h-full"
+        />
+      </View>
+
+      {/* Contenido */}
+      <ScrollView
+        className="flex-1"
+        // contentContainerStyle={{ paddingBottom: 110 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-center justify-between">
+        {/* Barra superior: título + heart */}
+        <View className="mt-10 px-4 flex-row items-center justify-between">
           <Text className="text-white text-3xl font-bold">Descubre</Text>
-          <Link
-            href={{
-              pathname: "adoptionLikes/[id]",
-              // params: {
-              //   name: item.name,
-              //   avatar: item.avatar,
-              //   time: item.time,
-              // },
-            }}
-            asChild
+
+          <Pressable
+            className="bg-white/20 p-2 rounded-full"
+            onPress={() => router.push({ pathname: "adoptionLikes/[id]" })}
+            hitSlop={10}
           >
-            <Pressable
-              className="bg-white/20 p-2 rounded-full"
-              style={{
-                zIndex: 100,
-              }}
-            >
-              <Heart size={24} color="white" />
-            </Pressable>
-          </Link>
+            <Heart size={24} color="white" />
+          </Pressable>
         </View>
-      </LinearGradient>
-      {adoptionPet.length > 0 ? (
-        <View className="flex-1 items-center justify-between">
+
+        {/* Wrapper de swiper y botones */}
+        <View className="items-center">
+          {/* Mensaje flotante arriba del card */}
           {swipeMessage !== "" && (
-            <View
-              style={{
-                position: "absolute",
-                top: 200,
-                alignSelf: "center",
-                backgroundColor:
-                  swipeMessage === "¡Lo quiero!" ? "#34D399" : "#F87171",
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 20,
-                zIndex: 200,
-              }}
-            >
-              <Text
-                style={{ color: "white", fontWeight: "bold", fontSize: 18 }}
-              >
+            <View className={`mb-3 px-5 py-2 rounded-2xl ${swipeBgClass}`}>
+              <Text className="text-white font-bold text-lg">
                 {swipeMessage}
               </Text>
             </View>
           )}
-          {/* Swiper ocupando espacio vertical */}
-          <Swiper
-            ref={(c) => {
-              swiperRef.current = c;
-            }}
-            cards={adoptionPet}
-            renderCard={(mediaItem) => (
-              <View className="gap-y-2">
-                <View
-                  className="bg-white rounded-3xl shadow-md"
-                  style={{
-                    width: screenWidth - 32,
-                    height: screenHeight * 0.5,
-                    alignSelf: "center",
-                    overflow: "hidden",
-                  }}
-                >
-                  <Image
-                    // source={{ uri: mediaItem[0].source }}
-                    source={{ uri: mediaItem.media_adoption_pet[0]?.source }}
-                    className="w-full h-[80%] rounded-tl-3xl"
-                    resizeMode="cover"
-                  />
-                  <View className="flex-row px-4 py-2">
-                    <View>
-                      <Text className="text-xl font-semibold text-gray-700">
-                        {/* Buster Hernandez */}
-                        {mediaItem.name}
-                      </Text>
-                      <Text className="text-base text-gray-600">
-                        {/* {mediaItem.age} años */}
-                        {getAge(mediaItem.birthdate)} años
-                      </Text>
-                      <Text className="text-base text-gray-400">
-                        {/* Ciudad de Panama */}
-                        {mediaItem.location}
-                      </Text>
-                    </View>
-                    <View className="ml-auto items-center justify-center">
-                      <Info color="#6b7280" size={30} />
-                    </View>
-                  </View>
-                </View>
-                <View className="flex-row justify-between p-3 bg-white rounded-3xl shadow-md">
-                  <View className=" bg-white rounded-full px-3 border border-red-400 items-center justify-center">
-                    <Text className="text-red-400 text-lg font-semibold">
-                      {mediaItem.likes} Likes
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center justify-center gap-x-2">
-                    <Text className="text-xl text-gray-600 font-semibold">
-                      Gil Arauz
-                    </Text>
-                    <Image
-                      source={{
-                        uri: "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
-                      }}
-                      className="w-12 h-12 rounded-full border-4 border-white"
-                    />
-                  </View>
-                </View>
-              </View>
-            )}
-            containerStyle={{
-              marginTop: -140,
-              flexGrow: 0,
-              alignSelf: "center",
-              zIndex: 1,
-            }}
-            onSwiping={(x, y) => {
-              if (x < -50) {
-                setSwipeMessage("No me interesa");
-              } else if (x > 50) {
-                setSwipeMessage("¡Lo quiero!");
-              } else {
+
+          {/* Swiper (cards) */}
+          {adoptionPet.length > 0 ? (
+            <Swiper
+              ref={(c) => (swiperRef.current = c)}
+              cards={adoptionPet}
+              renderCard={(item) => (
+                <AdoptionCard
+                  item={item}
+                  getAge={getAge}
+                  onInfoPress={goToAdoptionProfile}
+                  onOwnerPress={goToOwnerProfile}
+                />
+              )}
+              backgroundColor="transparent"
+              stackSize={1}
+              stackSeparation={0}
+              animateCardOpacity
+              disableBottomSwipe
+              onSwiping={(x, y) => handleSwiping(x)} // <- usa x para el mensaje
+              onSwipedRight={() => {
+                if (isManualSwipe.current) return;
                 setSwipeMessage("");
-              }
-            }}
-            // onSwipedRight={(i) => {
-            //   console.log(
-            //     `Te gusto la mascota con post_id: ${media[i]?.post_id}`
-            //   );
-            //   setSwipeMessage("");
-            // }}
-            // onSwipedRight={async (i) => {
-            //   const adoption_pet_id = media[i]?.id; // Asegúrate que este sea el campo correcto
-            //   const user_id = "9b4fc3c3-df95-4763-b2b9-8449c78e9b3a";
-
-            //   console.log(`Te gustó la mascota con id: ${adoption_pet_id}`);
-
-            //   // Insertar like en la tabla
-            //   const { error } = await supabase
-            //     .from("adoption_likes_pet")
-            //     .insert([
-            //       {
-            //         adoption_pet_id,
-            //         user_id,
-            //       },
-            //     ]);
-
-            //   if (error) {
-            //     console.error("Error insertando like:", error.message);
-            //   } else {
-            //     console.log("Like guardado correctamente.");
-            //   }
-
-            //   setSwipeMessage("");
-            // }}
-            onSwipedRight={async (i) => {
-              // 👇 No hagas nada si ya insertaste desde botón
-              if (isManualSwipe.current) return;
-
-              const adoption_pet_id = adoptionPet[i]?.id;
-              const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
-
-              const { error } = await supabase
-                .from("adoption_likes_pet")
-                .insert([{ adoption_pet_id, user_id }]);
-
-              if (error) {
-                console.error(
-                  "Error insertando like desde swipe:",
-                  error.message
-                );
-              } else {
-                console.log("Like guardado correctamente desde swipe.");
-              }
-
-              setSwipeMessage("");
-            }}
-            onSwipedLeft={(i) => {
-              console.log(
-                `Pasaste mascota con post_id: ${adoptionPet[i]?.post_id}`
-              );
-              setSwipeMessage("");
-            }}
-            onSwipedTop={(i) => {
-              console.log(
-                `Adoptaste la mascota con post_id: ${adoptionPet[i]?.post_id}`
-              );
-              alert("Me adoptaste");
-              setSwipeMessage("");
-            }}
-            cardIndex={0}
-            backgroundColor="transparent"
-            stackSize={1}
-            stackSeparation={0}
-            animateCardOpacity
-            disableBottomSwipe
-            onSwiped={(i) => {
-              setSwipeMessage("");
-              setIndex(i + 1);
-            }}
-          />
-
-          {/* Botones debajo del Swiper */}
-
-          <View
-            className="flex-row items-center justify-center gap-x-5"
-            style={{
-              position: "absolute",
-              bottom: 50,
-              left: 0,
-              right: 0,
-              zIndex: 100,
-            }}
-          >
-            <Pressable
-              className="bg-red-500 rounded-full shadow-md items-center justify-center size-20"
-              onPress={() => handleSwipe("left")}
-            >
-              <Close size={40} color="white" />
-            </Pressable>
-
-            <Pressable
-              className="bg-[#FE9B5C] rounded-full shadow-md items-center justify-center size-24"
-              onPress={() => alert("Me adoptaste")}
-            >
-              <Paw size={42} color="white" />
-            </Pressable>
-
-            {/* <Pressable
-              className="bg-yellow-400 rounded-full shadow-md items-center justify-center size-20"
-              onPress={() => handleSwipe("right")}
-            >
-              <Heart size={40} color="white" />
-            </Pressable> */}
-            <Pressable
-              className="bg-yellow-400 rounded-full shadow-md items-center justify-center size-20"
-              onPress={() => handleSwipe("right")}
-            >
-              <Heart size={40} color="white" />
-            </Pressable>
-          </View>
+                swipeMessageRef.current = "";
+              }}
+              onSwipedLeft={() => {
+                setSwipeMessage("");
+                swipeMessageRef.current = "";
+              }}
+              onSwipedTop={() => {
+                setSwipeMessage("");
+                swipeMessageRef.current = "";
+                alert("Me adoptaste");
+              }}
+              onSwiped={(i) => {
+                setSwipeMessage("");
+                swipeMessageRef.current = "";
+                setIndex(i + 1);
+              }}
+              // 🔴 IMPORTANTE: limpiar cuando se “aborta” el swipe
+              onSwipedAborted={() => {
+                setSwipeMessage("");
+                swipeMessageRef.current = "";
+              }}
+              cardIndex={0}
+              containerStyle={{
+                marginTop: 0,
+              }}
+            />
+          ) : (
+            <Text className="text-gray-500 text-lg text-center mt-6">
+              Cargando mascotas...
+            </Text>
+          )}
         </View>
-      ) : (
-        <Text className="text-gray-500 text-lg text-center mt-6">
-          Cargando mascotas...
-        </Text>
-      )}
+      </ScrollView>
+
+      {/* BOTONES — FIJOS ABAJO DE LA PANTALLA */}
+      <View
+        className="absolute left-0 right-0 flex-row items-center justify-center gap-x-5"
+        style={{ bottom: 40, zIndex: 50 }}
+        pointerEvents="box-none"
+      >
+        <Pressable
+          className="rounded-full items-center justify-center w-[78px] h-[78px] bg-red-500 shadow-xl"
+          onPress={() => handleSwipe("left")}
+        >
+          <Close size={38} color="white" />
+        </Pressable>
+
+        <Pressable
+          className="rounded-full items-center justify-center w-[92px] h-[92px] bg-[#FE9B5C] shadow-xl"
+          onPress={() => alert("Me adoptaste")}
+        >
+          <Paw size={42} color="white" />
+        </Pressable>
+
+        <Pressable
+          className="rounded-full items-center justify-center w-[78px] h-[78px] bg-yellow-400 shadow-xl"
+          onPress={() => handleSwipe("right")}
+        >
+          <Heart size={38} color="white" />
+        </Pressable>
+      </View>
     </View>
   );
 }
