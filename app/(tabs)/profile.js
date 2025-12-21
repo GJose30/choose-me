@@ -155,7 +155,7 @@ function ProfileHeader({
         >
           <Text className="text-white text-base font-semibold">Seguir</Text>
         </Pressable>
-        <Pressable
+        {/* <Pressable
           onPress={onPressMessage}
           className="p-[8px] bg-white rounded-2xl my-2"
           style={{
@@ -167,7 +167,7 @@ function ProfileHeader({
           }}
         >
           <MessageIcon color="#FE9B5C" size={19} />
-        </Pressable>
+        </Pressable> */}
       </View>
 
       {/* Sección Mascotas */}

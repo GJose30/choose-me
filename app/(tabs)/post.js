@@ -10,6 +10,7 @@ import {
 import { useRouter, Stack } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../../lib/supabase";
+import { useUser } from "@clerk/clerk-expo";
 
 // 🔹 Card de mascota (memo para performance)
 const PetCard = memo(function PetCard({ pet, onPress }) {
@@ -56,22 +57,47 @@ export default function SelectPetScreen() {
   const [pets, setPets] = useState([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { isLoaded, isSignedIn, user } = useUser();
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   // TODO: reemplazar por el user real (auth)
   const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
 
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user?.id) return;
+
+    const fetchCurrentUserId = async () => {
+      const { data, error } = await supabase
+        .from("user")
+        .select("id")
+        .eq("clerk_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error obteniendo user interno:", error.message);
+        return;
+      }
+
+      if (!data?.id) {
+        console.warn("No existe fila en user para este clerk_id");
+        return;
+      }
+
+      setCurrentUserId(data.id);
+    };
+
+    fetchCurrentUserId();
+  }, [isLoaded, isSignedIn, user?.id]);
+
   const fetchPets = useCallback(async () => {
+    if (!currentUserId) return;
+
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("pet")
-        .select(
-          `
-            *,
-            media_pet (*)
-          `
-        )
-        .eq("user_id", user_id);
+        .select(`*, media_pet(*)`)
+        .eq("user_id", currentUserId);
 
       if (error) {
         console.error("Error al obtener mascotas:", error);
@@ -81,11 +107,13 @@ export default function SelectPetScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user_id]);
+  }, [currentUserId]);
 
   useEffect(() => {
-    fetchPets();
-  }, [fetchPets]);
+    if (currentUserId) {
+      fetchPets();
+    }
+  }, [currentUserId, fetchPets]);
 
   const handlePressPet = useCallback(
     (petId) => {

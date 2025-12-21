@@ -9,14 +9,17 @@ import {
   MessageIcon,
   NotificationIcon,
   Plus,
+  Dots,
 } from "../../components/Icon";
 import "../../global.css";
 import { SideBarModal } from "../../components/Index/SideBarModal";
+import { ChatModal } from "../../components/Index/ChatModal";
 import { useUser } from "@clerk/clerk-expo";
 import { supabase } from "../../lib/supabase";
 
 export default function TabsLayout() {
   const [sideBarModarVisible, setSideBarModarVisible] = useState(false);
+  const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
 
   // --- badge state ---
   const [supaUserId, setSupaUserId] = useState(null);
@@ -184,9 +187,31 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          headerTitle: "",
           title: "",
-          headerStyle: { backgroundColor: "#FE9B5C" },
+          headerStyle: { backgroundColor: "white" },
+          headerTitle: "Mensajes",
+          headerRight: () => (
+            <>
+              <View className="mr-4">
+                <Pressable onPress={() => setChatOptionsVisible(true)}>
+                  <Dots color={"#374151"} size={24} />
+                </Pressable>
+              </View>
+
+              <ChatModal
+                visible={chatOptionsVisible}
+                onClose={() => setChatOptionsVisible(false)}
+                onReport={() => {
+                  // aquí puedes meter lógica real de "reportar"
+                  console.log("🚨 Reportar chat");
+                }}
+                onBlock={() => {
+                  // aquí puedes meter lógica real de "bloquear"
+                  console.log("⛔ Bloquear usuario");
+                }}
+              />
+            </>
+          ),
           tabBarIcon: () => (
             <TabIconBox>
               <MessageIcon color={"white"} size={24} />

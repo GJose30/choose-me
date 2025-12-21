@@ -13,6 +13,7 @@ import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { MessageIcon, ArrowLeft } from "../../../components/Icon";
 import { ProfileMetric } from "../../../components/profile/ProfileMetrics";
 import { supabase } from "../../../lib/supabase";
+import { useUser } from "@clerk/clerk-expo";
 
 const screenWidth = Dimensions.get("window").width;
 const IMAGE_SIZE = Math.floor(screenWidth / 3);
@@ -81,6 +82,77 @@ const PetCard = memo(function PetCard({ item }) {
     </Pressable>
   );
 });
+
+// const openChatWithUser = useCallback(
+//   async (peerUserId) => {
+//     if (!peerUserId) return;
+
+//     // 1) obtener usuario actual
+//     const { data: me, error: meError } = await supabase
+//       .from("user")
+//       .select("id")
+//       .eq("clerk_id", user.id)
+//       .maybeSingle();
+
+//     if (meError || !me?.id) {
+//       console.error("No se pudo obtener usuario actual");
+//       return;
+//     }
+
+//     const myUserId = me.id;
+
+//     // 2) buscar chat existente
+//     const { data: chats, error: chatError } = await supabase
+//       .from("chats")
+//       .select(
+//         `
+//       id,
+//       chat_members ( user_id )
+//     `
+//       )
+//       .eq("type", "dm");
+
+//     if (chatError) {
+//       console.error("Error buscando chats", chatError.message);
+//       return;
+//     }
+
+//     let chatId = null;
+
+//     for (const chat of chats || []) {
+//       const members = chat.chat_members.map((m) => m.user_id);
+//       if (members.includes(myUserId) && members.includes(peerUserId)) {
+//         chatId = chat.id;
+//         break;
+//       }
+//     }
+
+//     // 3) crear chat si no existe
+//     if (!chatId) {
+//       const { data: newChat, error: createError } = await supabase
+//         .from("chats")
+//         .insert({ type: "dm", created_by: myUserId })
+//         .select("id")
+//         .maybeSingle();
+
+//       if (createError || !newChat) {
+//         console.error("Error creando chat");
+//         return;
+//       }
+
+//       chatId = newChat.id;
+
+//       await supabase.from("chat_members").insert([
+//         { chat_id: chatId, user_id: myUserId },
+//         { chat_id: chatId, user_id: peerUserId },
+//       ]);
+//     }
+
+//     // 4) navegar
+//     router.push(`/chatDetail/${chatId}`);
+//   },
+//   [router]
+// );
 
 // ---- Header del perfil (se usa como ListHeaderComponent) ----
 function ProfileHeader({
@@ -159,6 +231,15 @@ function ProfileHeader({
         </Pressable>
         <Pressable
           onPress={onPressMessage}
+          // onPress={() =>
+          //   router.push({
+          //     pathname: "chatDetail/[id]",
+          //     params: {
+          //       // userId: item?.chatId,
+          //       userId: "24c01bd9-d47d-4984-ada5-ecd80442a904",
+          //     },
+          //   })
+          // }
           className="p-[8px] bg-white rounded-2xl my-2"
           style={{
             shadowColor: "#000",
@@ -210,6 +291,90 @@ export default function Profile() {
   //    tú envías { params: { index: owner.id } }, así que leemos "index"
   const { index } = useLocalSearchParams();
   const routeUserId = Array.isArray(index) ? index[0] : index;
+
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  const openDmChat = useCallback(async () => {
+    try {
+      if (!isLoaded || !isSignedIn || !user?.id) return;
+      if (!routeUserId) return;
+
+      // 1) myUserId (tabla user) por clerk_id
+      const { data: me, error: meError } = await supabase
+        .from("user")
+        .select("id")
+        .eq("clerk_id", user.id)
+        .maybeSingle();
+
+      if (meError || !me?.id) {
+        console.error("No se pudo obtener usuario actual:", meError?.message);
+        return;
+      }
+
+      const myUserId = me.id;
+      const peerUserId = String(routeUserId);
+
+      // 2) Buscar chat DM existente entre ambos (forma simple)
+      const { data: dmChats, error: dmError } = await supabase
+        .from("chats")
+        .select("id, chat_members(user_id)")
+        .eq("type", "dm");
+
+      if (dmError) {
+        console.error("Error buscando chats:", dmError.message);
+        return;
+      }
+
+      let chatId = null;
+
+      for (const chat of dmChats || []) {
+        const members = (chat.chat_members || []).map((m) => String(m.user_id));
+        if (
+          members.includes(String(myUserId)) &&
+          members.includes(peerUserId)
+        ) {
+          chatId = chat.id;
+          break;
+        }
+      }
+
+      // 3) Crear si no existe
+      if (!chatId) {
+        const { data: newChat, error: createError } = await supabase
+          .from("chats")
+          .insert({ type: "dm", created_by: myUserId })
+          .select("id")
+          .maybeSingle();
+
+        if (createError || !newChat?.id) {
+          console.error("Error creando chat:", createError?.message);
+          return;
+        }
+
+        chatId = newChat.id;
+
+        const { error: membersError } = await supabase
+          .from("chat_members")
+          .insert([
+            { chat_id: chatId, user_id: myUserId, role: "owner" },
+            { chat_id: chatId, user_id: peerUserId, role: "member" },
+          ]);
+
+        if (membersError) {
+          console.error("Error creando miembros:", membersError.message);
+          return;
+        }
+      }
+
+      // 4) Navegar (IMPORTANTE: usa el nombre de param que te funciona, NO "id")
+      router.push({
+        pathname: "chatDetail/[id]",
+        params: { userId: String(chatId) }, // ✅ aquí va el chatId pero el param se llama "userId"
+      });
+    } catch (e) {
+      console.error("openDmChat error:", e);
+    }
+  }, [isLoaded, isSignedIn, user?.id, routeUserId, router]);
 
   // estado
   const [userRow, setUserRow] = useState(null);
@@ -286,6 +451,22 @@ export default function Profile() {
   }, []);
 
   // --- Header render ---
+  // const renderHeader = useCallback(() => {
+  //   return (
+  //     <ProfileHeader
+  //       userRow={userRow}
+  //       profilePic={profilePic}
+  //       pets={pets}
+  //       onPressFollow={() =>
+  //         alert(`Seguiste a ${userRow?.username || "este usuario"}`)
+  //       }
+  //       onPressMessage={() =>
+  //         alert(`Escribirle a ${userRow?.username || "este usuario"}`)
+  //       }
+  //     />
+  //   );
+  // }, [userRow, profilePic, pets]);
+
   const renderHeader = useCallback(() => {
     return (
       <ProfileHeader
@@ -295,12 +476,10 @@ export default function Profile() {
         onPressFollow={() =>
           alert(`Seguiste a ${userRow?.username || "este usuario"}`)
         }
-        onPressMessage={() =>
-          alert(`Escribirle a ${userRow?.username || "este usuario"}`)
-        }
+        onPressMessage={openDmChat} // ✅ aquí
       />
     );
-  }, [userRow, profilePic, pets]);
+  }, [userRow, profilePic, pets, openDmChat]);
 
   if (loading) {
     return (

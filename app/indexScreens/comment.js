@@ -624,32 +624,48 @@ export default function Comment() {
         data={comment}
         keyExtractor={keyExtractor}
         renderItem={({ item, index }) => (
-          <Pressable
-            onLongPress={() => {
-              setSelectedIndex(index);
-              setOptionsVisible(true);
-              setSelectedCommentId(item.id);
-            }}
-          >
-            <View className="flex-row items-center my-2 px-4">
-              <View>
-                <Text className="text-gray-800 font-medium">
-                  {item.user?.username}
-                </Text>
-                <Text className="text-gray-600">{item.content}</Text>
-                <Text className="text-gray-400 text-sm">
-                  {tiempoTranscurrido(item.created_at)}
-                </Text>
+          <View className="px-4">
+            <Pressable
+              className="flex-row gap-x-1"
+              onPress={() =>
+                router.push({
+                  pathname: "indexScreens/profile/[id]",
+                  params: { index: item.user?.id },
+                })
+              }
+            >
+              <Image
+                className="h-5 w-5 rounded-full"
+                source={{ uri: item.user?.profile_pic }}
+              />
+              <Text className="text-gray-800 font-medium">
+                {item.user?.username}
+              </Text>
+            </Pressable>
+            <Pressable
+              onLongPress={() => {
+                setSelectedIndex(index);
+                setOptionsVisible(true);
+                setSelectedCommentId(item.id);
+              }}
+            >
+              <View className="flex-row items-center mb-2">
+                <View className="pb-1">
+                  <Text className="text-gray-600">{item.content}</Text>
+                  <Text className="text-gray-400 text-sm">
+                    {tiempoTranscurrido(item.created_at)}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => handleLikeComment(item.id, item.liked)}
+                  className="ml-auto flex-row items-center"
+                >
+                  <Heart size={18} color={item.liked ? "red" : "#374151"} />
+                  <Text className="text-gray-600 ml-1">{item.likes}</Text>
+                </Pressable>
               </View>
-              <Pressable
-                onPress={() => handleLikeComment(item.id, item.liked)}
-                className="ml-auto flex-row items-center"
-              >
-                <Heart size={18} color={item.liked ? "red" : "#374151"} />
-                <Text className="text-gray-600 ml-1">{item.likes}</Text>
-              </Pressable>
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
         )}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={
