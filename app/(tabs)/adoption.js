@@ -19,6 +19,7 @@ import { supabase } from "../../lib/supabase";
 import { Stack, useRouter } from "expo-router";
 import { Heart, Close, Paw, Info } from "../../components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** ---------- Tarjeta de adopción (memo) ---------- */
 const AdoptionCard = React.memo(function AdoptionCard({
@@ -30,94 +31,140 @@ const AdoptionCard = React.memo(function AdoptionCard({
   const cover = item?.media_adoption_pet?.[0]?.source;
   const owner = item?.user;
   const ownerName = owner?.username || "Dueño desconocido";
-  const { width, height } = useWindowDimensions();
-  const cardWidth = useMemo(() => width - 32, [width]);
-  const cardHeight = useMemo(() => Math.floor(height * 0.5), [height]);
   const ownerPic =
     owner?.profile_pic ||
     "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg";
 
+  const { width, height } = useWindowDimensions();
+
+  const cardWidth = useMemo(() => Math.min(width * 0.92, 420), [width]);
+  const cardHeight = useMemo(() => {
+    // clamp: min 460, max 640
+    const h = Math.floor(height * 0.62);
+    return Math.max(460, Math.min(h, 640));
+  }, [height]);
+
   return (
-    <View className="gap-3">
-      {/* Tarjeta principal */}
-      <View
-        className="bg-white rounded-3xl overflow-hidden shadow-xl self-center"
-        style={{
-          width: cardWidth,
-          height: cardHeight,
-          alignSelf: "center",
-          elevation: 6,
-        }}
-      >
-        {!!cover && (
-          <Image
-            source={{ uri: cover }}
-            className="w-full h-[350px]"
-            resizeMode="cover"
-          />
+    <View
+      className="rounded-[28px] overflow-hidden bg-white shadow-xl"
+      style={{
+        width: cardWidth,
+        height: cardHeight,
+        alignSelf: "center",
+        elevation: 10,
+      }}
+    >
+      {/* Imagen */}
+      {!!cover ? (
+        <Image
+          source={{ uri: cover }}
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="cover"
+        />
+      ) : (
+        <View className="flex-1 items-center justify-center bg-gray-200">
+          <Text className="text-gray-500">Sin imagen</Text>
+        </View>
+      )}
+
+      {/* Overlay gradient para legibilidad */}
+      <View className="absolute left-0 right-0 bottom-0 top-0">
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.18)", "rgba(0,0,0,0.72)"]}
+          style={{ flex: 1 }}
+        />
+      </View>
+
+      {/* Top bar: location + info */}
+      <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between">
+        {!!item?.location ? (
+          <View
+            style={{
+              backgroundColor: "rgba(255,255,255,0.22)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.25)",
+            }}
+            className="px-3 py-2 rounded-full"
+          >
+            <Text className="text-white font-semibold" numberOfLines={1}>
+              {item.location}
+            </Text>
+          </View>
+        ) : (
+          <View />
         )}
 
-        <View className="flex-row px-4 py-3">
-          <View className="flex-1 pr-4">
+        <Pressable
+          style={{
+            backgroundColor: "rgba(255,255,255,0.22)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.25)",
+          }}
+          className="p-2 rounded-full"
+          onPress={() => onInfoPress?.(item?.id)}
+          hitSlop={10}
+        >
+          <Info color="white" size={26} />
+        </Pressable>
+      </View>
+
+      {/* Bottom content */}
+      <View className="absolute left-0 right-0 bottom-0 px-4 pb-4">
+        <View className="flex-row items-end justify-between">
+          {/* Nombre + edad */}
+          <View className="flex-1 pr-3">
             <Text
-              className="text-xl font-semibold text-gray-700"
+              className="text-white text-3xl font-extrabold"
               numberOfLines={1}
             >
               {item?.name ?? ""}
             </Text>
 
             {!!item?.birthdate && (
-              <Text className="text-base text-gray-600" numberOfLines={1}>
+              <Text
+                className="text-white/90 text-base font-semibold"
+                numberOfLines={1}
+              >
                 {getAge(item.birthdate)} años
               </Text>
             )}
-
-            <Text className="text-base text-gray-400" numberOfLines={1}>
-              {item?.location ?? ""}
-            </Text>
           </View>
 
-          <Pressable
-            className="ml-auto items-center justify-center p-1"
-            onPress={() => onInfoPress?.(item?.id)}
-            hitSlop={10}
-          >
-            <Info color="#6b7280" size={30} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Tarjeta secundaria: likes + dueño */}
-      <View
-        className="bg-white rounded-3xl flex-row justify-between items-center px-3 py-3 shadow-lg w-11/12 self-center"
-        style={{
-          width: cardWidth,
-          // height: cardHeight,
-          alignSelf: "center",
-          elevation: 6,
-        }}
-      >
-        <View className="rounded-full px-3 border border-red-400 items-center justify-center">
-          <Text className="text-lg font-semibold text-red-400">
-            {(item?.likes ?? 0) + " Likes"}
-          </Text>
+          {/* Likes chip */}
+          <View className="bg-white/22 px-3 py-2 rounded-full border border-white/20">
+            <Text className="text-white font-bold">
+              {(item?.likes ?? 0) + " Likes"}
+            </Text>
+          </View>
         </View>
 
+        {/* Dueño */}
         <Pressable
-          className="flex-row items-center justify-center gap-x-2"
+          className="mt-4 flex-row items-center"
           onPress={() => owner?.id && onOwnerPress?.(owner.id)}
           hitSlop={10}
         >
-          <Text
-            className="text-xl text-gray-600 font-semibold"
-            numberOfLines={1}
-          >
-            {ownerName}
-          </Text>
           <Image
             source={{ uri: ownerPic }}
-            className="w-12 h-12 rounded-full ring-4 ring-white shadow-md"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 999,
+              borderWidth: 2,
+              borderColor: "rgba(255,255,255,0.95)",
+            }}
           />
+          <View className="ml-3 flex-1">
+            <Text
+              className="text-white font-semibold text-lg"
+              numberOfLines={1}
+            >
+              {ownerName}
+            </Text>
+            <Text className="text-white/75 text-sm" numberOfLines={1}>
+              Ver perfil del dueño
+            </Text>
+          </View>
         </Pressable>
       </View>
     </View>
@@ -137,6 +184,21 @@ export default function Adoption() {
   const isManualSwipe = useRef(false);
 
   const [refreshing, setRefreshing] = useState(false);
+
+  const insets = useSafeAreaInsets();
+  const { height, width } = useWindowDimensions();
+
+  // Altura del dock inferior (botonera)
+  const footerHeight = useMemo(() => {
+    const base = height < 750 ? 104 : 120;
+    return base + insets.bottom;
+  }, [height, insets.bottom]);
+
+  // Altura del swiper para que no choque con el dock
+  const swiperHeight = useMemo(() => {
+    const h = height - footerHeight - 140; // 140 ≈ título + márgenes
+    return Math.max(460, Math.min(h, 700));
+  }, [height, footerHeight]);
 
   // Edad
   const getAge = useCallback((birthDate) => {
@@ -239,8 +301,74 @@ export default function Adoption() {
   const swipeBgClass =
     swipeMessage === "¡Lo quiero!" ? "bg-emerald-400" : "bg-red-400";
 
+  // Solo para blobs (diseño): tamaños responsivos
+  const blob1 = useMemo(() => Math.min(width * 0.85, 380), [width]);
+  const blob2 = useMemo(() => Math.min(width * 0.75, 320), [width]);
+  const blob3 = useMemo(() => Math.min(width * 0.65, 280), [width]);
+
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1">
+      {/* Fondo original (no negro): gradient pastel + blobs */}
+      <View className="absolute top-0 left-0 right-0 bottom-0">
+        {/* Base gradient “sunset” */}
+        <LinearGradient
+          colors={["#FFF7ED", "#FFE4E6", "#DBEAFE"]} // durazno -> rosado -> celeste suave
+          locations={[0, 0.55, 1]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+
+        {/* Blob 1 */}
+        <View
+          style={{
+            position: "absolute",
+            top: -blob1 * 0.25,
+            left: -blob1 * 0.25,
+            width: blob1,
+            height: blob1,
+            borderRadius: blob1 / 2,
+            backgroundColor: "rgba(254,155,92,0.25)", // naranja suave
+          }}
+        />
+
+        {/* Blob 2 */}
+        <View
+          style={{
+            position: "absolute",
+            top: height * 0.12,
+            right: -blob2 * 0.35,
+            width: blob2,
+            height: blob2,
+            borderRadius: blob2 / 2,
+            backgroundColor: "rgba(96,165,250,0.22)", // azul suave
+          }}
+        />
+
+        {/* Blob 3 */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: -blob3 * 0.35,
+            left: width * 0.18,
+            width: blob3,
+            height: blob3,
+            borderRadius: blob3 / 2,
+            backgroundColor: "rgba(250,204,21,0.20)", // amarillo suave
+          }}
+        />
+
+        {/* Velo para unificar y que el card resalte */}
+        <LinearGradient
+          colors={["rgba(255,255,255,0.0)", "rgba(255,255,255,0.35)"]}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+          }}
+        />
+      </View>
+
       {/* Header nativo */}
       <Stack.Screen
         options={{
@@ -250,18 +378,10 @@ export default function Adoption() {
         }}
       />
 
-      {/* Gradient naranja con borde redondeado abajo */}
-      <View className="absolute top-0 left-0 right-0 h-52 rounded-b-3xl overflow-hidden">
-        <LinearGradient
-          colors={["#f97316", "#facc15"]}
-          className="w-full h-full"
-        />
-      </View>
-
       {/* Contenido */}
       <ScrollView
         className="flex-1"
-        // contentContainerStyle={{ paddingBottom: 110 }}
+        contentContainerStyle={{ paddingBottom: footerHeight + 12 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -269,22 +389,43 @@ export default function Adoption() {
       >
         {/* Barra superior: título + heart */}
         <View className="mt-10 px-4 flex-row items-center justify-between">
-          <Text className="text-white text-3xl font-bold">Descubre</Text>
+          <View>
+            <Text className="text-slate-800 text-3xl font-extrabold">
+              Descubre
+            </Text>
+            <Text className="text-slate-600 font-medium">
+              Encuentra tu próxima amistad 🐾
+            </Text>
+          </View>
 
           <Pressable
-            className="bg-white/20 p-2 rounded-full"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.55)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.7)",
+            }}
+            className="p-2 rounded-full"
             onPress={() => router.push({ pathname: "adoptionLikes/[id]" })}
             hitSlop={10}
           >
-            <Heart size={24} color="white" />
+            <Heart size={24} color="#FE9B5C" />
           </Pressable>
         </View>
 
-        {/* Wrapper de swiper y botones */}
+        {/* Wrapper de swiper y mensajes */}
         <View className="items-center">
           {/* Mensaje flotante arriba del card */}
           {swipeMessage !== "" && (
-            <View className={`mb-3 px-5 py-2 rounded-2xl ${swipeBgClass}`}>
+            <View
+              className={`mt-4 mb-3 px-5 py-2 rounded-2xl ${swipeBgClass}`}
+              style={{
+                shadowColor: "#000",
+                shadowOpacity: 0.15,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 6 },
+                elevation: 8,
+              }}
+            >
               <Text className="text-white font-bold text-lg">
                 {swipeMessage}
               </Text>
@@ -309,7 +450,7 @@ export default function Adoption() {
               stackSeparation={0}
               animateCardOpacity
               disableBottomSwipe
-              onSwiping={(x, y) => handleSwiping(x)} // <- usa x para el mensaje
+              onSwiping={(x, y) => handleSwiping(x)}
               onSwipedRight={() => {
                 if (isManualSwipe.current) return;
                 setSwipeMessage("");
@@ -329,50 +470,84 @@ export default function Adoption() {
                 swipeMessageRef.current = "";
                 setIndex(i + 1);
               }}
-              // 🔴 IMPORTANTE: limpiar cuando se “aborta” el swipe
               onSwipedAborted={() => {
                 setSwipeMessage("");
                 swipeMessageRef.current = "";
               }}
               cardIndex={0}
               containerStyle={{
-                marginTop: 0,
+                marginTop: 14,
+                height: swiperHeight,
               }}
             />
           ) : (
-            <Text className="text-gray-500 text-lg text-center mt-6">
+            <Text className="text-slate-600 text-lg text-center mt-6">
               Cargando mascotas...
             </Text>
           )}
         </View>
       </ScrollView>
 
-      {/* BOTONES — FIJOS ABAJO DE LA PANTALLA */}
+      {/* DOCK INFERIOR — fijo y NO se monta en el swiper */}
       <View
-        className="absolute left-0 right-0 flex-row items-center justify-center gap-x-5"
-        style={{ bottom: 40, zIndex: 50 }}
-        pointerEvents="box-none"
+        className="absolute left-0 right-0"
+        style={{
+          bottom: 0,
+          paddingBottom: insets.bottom + 10,
+          paddingTop: 14,
+          paddingHorizontal: 18,
+        }}
       >
-        <Pressable
-          className="rounded-full items-center justify-center w-[78px] h-[78px] bg-red-500 shadow-xl"
-          onPress={() => handleSwipe("left")}
+        <View
+          className="flex-row items-center justify-center gap-x-5 rounded-3xl"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.72)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.9)",
+            paddingVertical: 12,
+            shadowColor: "#000",
+            shadowOpacity: 0.12,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 12,
+          }}
         >
-          <Close size={38} color="white" />
-        </Pressable>
+          <Pressable
+            className="rounded-full items-center justify-center"
+            style={{
+              width: height < 750 ? 66 : 74,
+              height: height < 750 ? 66 : 74,
+              backgroundColor: "#ef4444",
+            }}
+            onPress={() => handleSwipe("left")}
+          >
+            <Close size={height < 750 ? 32 : 36} color="white" />
+          </Pressable>
 
-        <Pressable
-          className="rounded-full items-center justify-center w-[92px] h-[92px] bg-[#FE9B5C] shadow-xl"
-          onPress={() => alert("Me adoptaste")}
-        >
-          <Paw size={42} color="white" />
-        </Pressable>
+          <Pressable
+            className="rounded-full items-center justify-center"
+            style={{
+              width: height < 750 ? 78 : 88,
+              height: height < 750 ? 78 : 88,
+              backgroundColor: "#FE9B5C",
+            }}
+            onPress={() => alert("Me adoptaste")}
+          >
+            <Paw size={height < 750 ? 38 : 42} color="white" />
+          </Pressable>
 
-        <Pressable
-          className="rounded-full items-center justify-center w-[78px] h-[78px] bg-yellow-400 shadow-xl"
-          onPress={() => handleSwipe("right")}
-        >
-          <Heart size={38} color="white" />
-        </Pressable>
+          <Pressable
+            className="rounded-full items-center justify-center"
+            style={{
+              width: height < 750 ? 66 : 74,
+              height: height < 750 ? 66 : 74,
+              backgroundColor: "#facc15",
+            }}
+            onPress={() => handleSwipe("right")}
+          >
+            <Heart size={height < 750 ? 32 : 36} color="white" />
+          </Pressable>
+        </View>
       </View>
     </View>
   );

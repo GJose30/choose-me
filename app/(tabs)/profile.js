@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { MessageIcon } from "../../components/Icon";
 import { ProfileMetric } from "../../components/profile/ProfileMetrics";
 import { supabase } from "../../lib/supabase";
 import { useUser } from "@clerk/clerk-expo";
@@ -58,7 +57,7 @@ const PetCard = memo(function PetCard({ item }) {
       onPress={() =>
         router.push({
           pathname: "indexScreens/petProfile/[id]",
-          params: { pet_id: String(item.id) }, // 👈 solo pet_id
+          params: { pet_id: String(item.id) },
         })
       }
     >
@@ -69,9 +68,11 @@ const PetCard = memo(function PetCard({ item }) {
           <Text className="text-gray-500 text-xs">Sin foto</Text>
         </View>
       )}
+
       <Text className="font-semibold text-gray-700 mt-2" numberOfLines={1}>
         {item?.name || "Mascota"}
       </Text>
+
       {!!item?.breed && (
         <Text className="text-sm text-gray-500" numberOfLines={1}>
           {item.breed}
@@ -81,16 +82,35 @@ const PetCard = memo(function PetCard({ item }) {
   );
 });
 
-// ---------- Header del perfil ----------
+// ---------- Header del perfil (MI PERFIL) ----------
 function ProfileHeader({
   userRow,
   profilePic,
   pets,
-  onPressFollow,
-  onPressMessage,
+  activeTab,
+  setActiveTab,
+  postsCount,
+  savedCount,
 }) {
   const router = useRouter();
   const banner = userRow?.banner_pic;
+
+  const TabButton = ({ label, isActive, onPress }) => (
+    <Pressable
+      onPress={onPress}
+      className={`flex-1 py-2 rounded-full ${
+        isActive ? "bg-[#FE9B5C]" : "bg-gray-100"
+      }`}
+    >
+      <Text
+        className={`text-center font-semibold ${
+          isActive ? "text-white" : "text-gray-600"
+        }`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
 
   return (
     <View>
@@ -132,7 +152,7 @@ function ProfileHeader({
         </View>
       </View>
 
-      {/* Nombre + Bio + Acciones */}
+      {/* Nombre + Bio */}
       <View className="mt-14 mx-4 items-center">
         <Text
           className="text-2xl font-semibold text-gray-800"
@@ -148,30 +168,8 @@ function ProfileHeader({
         </Text>
       </View>
 
-      <View className="mt-3 flex-row justify-center items-center gap-x-3">
-        <Pressable
-          onPress={onPressFollow}
-          className="py-[8px] px-7 bg-[#FE9B5C] rounded-full my-2"
-        >
-          <Text className="text-white text-base font-semibold">Seguir</Text>
-        </Pressable>
-        {/* <Pressable
-          onPress={onPressMessage}
-          className="p-[8px] bg-white rounded-2xl my-2"
-          style={{
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 6,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-          }}
-        >
-          <MessageIcon color="#FE9B5C" size={19} />
-        </Pressable> */}
-      </View>
-
-      {/* Sección Mascotas */}
-      <View className="flex-row items-center justify-between px-4 mt-2 mb-1">
+      {/* Sección Mascotas + Crear Mascota */}
+      <View className="flex-row items-center justify-between px-4 mt-3 mb-1">
         <Text className="text-lg font-semibold text-gray-700">
           Mis Mascotas
         </Text>
@@ -200,11 +198,25 @@ function ProfileHeader({
         }}
       />
 
-      {/* Título publicaciones */}
+      {/* Título + Tabs */}
       <View className="px-4 mt-2 mb-2">
         <Text className="text-lg font-semibold text-gray-700">
-          Mis Publicaciones
+          {activeTab === "posts" ? "Mis Publicaciones" : "Guardados"}
         </Text>
+
+        {/* Tabs (botón de guardados agregado) */}
+        <View className="flex-row gap-2 mt-3 bg-white">
+          <TabButton
+            label={`Publicaciones (${postsCount})`}
+            isActive={activeTab === "posts"}
+            onPress={() => setActiveTab("posts")}
+          />
+          <TabButton
+            label={`Guardados (${savedCount})`}
+            isActive={activeTab === "saved"}
+            onPress={() => setActiveTab("saved")}
+          />
+        </View>
       </View>
     </View>
   );
@@ -221,38 +233,90 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fetchers
+  // ✅ NUEVO (sin tocar tus variables existentes)
+  const [bookmarkedPosts, setBookmarkedPosts] = useState([]);
+  const [activeTab, setActiveTab] = useState("posts"); // por defecto igual que hoy
+
+  // 1) Traer mi fila interna (tabla user) usando clerk_id
   const fetchUser = useCallback(async () => {
-    if (!isLoaded || !isSignedIn) return;
+    if (!isLoaded || !isSignedIn || !user?.id) return;
+
     const { data, error } = await supabase
       .from("user")
       .select("*")
       .eq("clerk_id", user.id)
       .single();
-    if (!error) {
-      setUserRow(data);
-      setProfilePic(data?.profile_pic ?? null);
+
+    if (error) {
+      console.error("Error fetchUser:", error.message);
+      return;
     }
+
+    setUserRow(data);
+    setProfilePic(data?.profile_pic ?? null);
   }, [isLoaded, isSignedIn, user?.id]);
 
   const fetchPets = useCallback(async () => {
     if (!userRow?.id) return;
+
     const { data, error } = await supabase
       .from("pet")
       .select("*, media_pet(*)")
       .eq("user_id", userRow.id)
       .order("created_at", { ascending: false });
-    if (!error) setPets(data || []);
+
+    if (error) {
+      console.error("Error fetchPets:", error.message);
+      return;
+    }
+
+    setPets(data || []);
   }, [userRow?.id]);
 
   const fetchPosts = useCallback(async () => {
     if (!userRow?.id) return;
+
     const { data, error } = await supabase
       .from("post")
       .select("*, media_post(*)")
       .eq("user_id", userRow.id)
       .order("created_at", { ascending: false });
-    if (!error) setPosts(data || []);
+
+    if (error) {
+      console.error("Error fetchPosts:", error.message);
+      return;
+    }
+
+    setPosts(data || []);
+  }, [userRow?.id]);
+
+  // ✅ NUEVO: Traer guardados desde post_bookmarks
+  const fetchBookmarks = useCallback(async () => {
+    if (!userRow?.id) return;
+
+    const { data, error } = await supabase
+      .from("post_bookmarks")
+      .select(
+        `
+        id,
+        created_at,
+        post:post_id (
+          *,
+          media_post(*)
+        )
+      `
+      )
+      .eq("user_id", userRow.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetchBookmarks:", error.message);
+      return;
+    }
+
+    const onlyPosts = (data || []).map((row) => row.post).filter(Boolean);
+
+    setBookmarkedPosts(onlyPosts);
   }, [userRow?.id]);
 
   const loadAll = useCallback(async () => {
@@ -264,7 +328,6 @@ export default function Profile() {
     }
   }, [fetchUser]);
 
-  // Carga inicial y dependiente
   useEffect(() => {
     loadAll();
   }, [loadAll]);
@@ -272,22 +335,21 @@ export default function Profile() {
   useEffect(() => {
     (async () => {
       if (!userRow?.id) return;
-      await Promise.all([fetchPets(), fetchPosts()]);
+      await Promise.all([fetchPets(), fetchPosts(), fetchBookmarks()]);
     })();
-  }, [userRow?.id, fetchPets, fetchPosts]);
+  }, [userRow?.id, fetchPets, fetchPosts, fetchBookmarks]);
 
-  // Pull to refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await fetchUser();
-      await Promise.all([fetchPets(), fetchPosts()]);
+      await Promise.all([fetchPets(), fetchPosts(), fetchBookmarks()]);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchUser, fetchPets, fetchPosts]);
+  }, [fetchUser, fetchPets, fetchPosts, fetchBookmarks]);
 
-  // Perf helpers
+  // PERF helpers
   const keyExtractor = useCallback((item) => String(item.id), []);
   const getItemLayout = useCallback((_data, index) => {
     const row = Math.floor(index / 3);
@@ -297,19 +359,19 @@ export default function Profile() {
 
   const renderHeader = useCallback(() => {
     return (
-      <ProfileHeader
-        userRow={userRow}
-        profilePic={profilePic}
-        pets={pets}
-        onPressFollow={() =>
-          alert(`Seguiste a ${userRow?.username || "este usuario"}`)
-        }
-        onPressMessage={() =>
-          alert(`Escribirle a ${userRow?.username || "este usuario"}`)
-        }
-      />
+      <View className="w-full">
+        <ProfileHeader
+          userRow={userRow}
+          profilePic={profilePic}
+          pets={pets}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          postsCount={posts?.length ?? 0}
+          savedCount={bookmarkedPosts?.length ?? 0}
+        />
+      </View>
     );
-  }, [userRow, profilePic, pets]);
+  }, [userRow, profilePic, pets, activeTab, posts, bookmarkedPosts]);
 
   if (loading) {
     return (
@@ -318,6 +380,8 @@ export default function Profile() {
       </View>
     );
   }
+
+  const dataToShow = activeTab === "posts" ? posts : bookmarkedPosts;
 
   return (
     <View className="flex-1 bg-white">
@@ -329,22 +393,19 @@ export default function Profile() {
         }}
       />
 
-      {/* Un solo FlatList: header (perfil + mascotas) + grid de posts */}
       <FlatList
-        data={posts}
+        data={dataToShow}
         keyExtractor={keyExtractor}
         numColumns={3}
         renderItem={({ item }) => <PostCell item={item} />}
         ListHeaderComponent={renderHeader}
         showsVerticalScrollIndicator={false}
-        // PERF
         getItemLayout={getItemLayout}
         initialNumToRender={18}
         maxToRenderPerBatch={18}
         windowSize={9}
         updateCellsBatchingPeriod={16}
         removeClippedSubviews
-        // REFRESH
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -352,10 +413,17 @@ export default function Profile() {
             tintColor="#FE9B5C"
           />
         }
-        contentContainerStyle={{ paddingBottom: 24 }}
+        // contentContainerStyle={{ paddingBottom: 24 }}
+        // style={{ flex: 1, width: "100%" }} // <-- IMPORTANTE
+        // contentContainerStyle={{ paddingBottom: 24, width: "100%" }} // <-- IMPORTANTE
+        // columnWrapperStyle={{ width: "100%" }} // <-- IMPORTANTE
         ListEmptyComponent={
           <View className="items-center justify-center py-16">
-            <Text className="text-gray-500">Aún no hay publicaciones</Text>
+            <Text className="text-gray-500">
+              {activeTab === "posts"
+                ? "Aún no hay publicaciones"
+                : "Aún no tienes guardados"}
+            </Text>
           </View>
         }
       />

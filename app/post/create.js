@@ -8,20 +8,22 @@ import {
   FlatList,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
-import { Close, ArrowLeft } from "../../components/Icon"; // 👈 AGREGADO
+import { Close, ArrowLeft } from "../../components/Icon";
 import "react-native-url-polyfill/auto";
 import { LinearGradient } from "expo-linear-gradient";
+import { useUser } from "@clerk/clerk-expo";
 
 const getMimeType = (uri) => {
-  const extension = uri.split(".").pop().toLowerCase();
-  if (["jpg", "jpeg", "png", "gif"].includes(extension)) return "image";
-  if (["mp4", "mov", "avi"].includes(extension)) return "video";
+  const extension = (uri.split(".").pop() || "").toLowerCase();
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "image";
+  if (["mp4", "mov", "avi", "m4v"].includes(extension)) return "video";
   return "application/octet-stream";
 };
 
@@ -30,16 +32,54 @@ export default function CreatePost() {
   const router = useRouter();
   const screenWidth = Dimensions.get("window").width;
 
+  const { isLoaded, isSignedIn, user } = useUser();
+
   const [description, setDescription] = useState("");
   const [mediaFiles, setMediaFiles] = useState([]);
   const [isPosting, setIsPosting] = useState(false);
 
-  const [petInfo, setPetInfo] = useState(null); // 👈 INFO DE LA MASCOTA
+  const [petInfo, setPetInfo] = useState(null);
 
-  const user_id = "5c16bcb5-489c-465e-8f42-186c6fe9061f";
+  // ✅ user_id real (tabla public.user)
+  const [viewerId, setViewerId] = useState(null);
+  const [resolvingUser, setResolvingUser] = useState(true);
+
   const likes = 0;
   const comments = 0;
   const imageSize = (screenWidth - 40) / 3;
+
+  // ========= RESOLVE VIEWER (tabla user por clerk_id) ==========
+  const resolveViewer = useCallback(async () => {
+    if (!isLoaded) return;
+
+    if (!isSignedIn || !user?.id) {
+      setViewerId(null);
+      setResolvingUser(false);
+      return;
+    }
+
+    setResolvingUser(true);
+    const { data, error } = await supabase
+      .from("user")
+      .select("id")
+      .eq("clerk_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error resolviendo viewerId:", error.message);
+      setViewerId(null);
+    } else {
+      setViewerId(data?.id ? String(data.id) : null);
+      if (!data?.id) {
+        console.warn("No existe fila en user para este clerk_id");
+      }
+    }
+    setResolvingUser(false);
+  }, [isLoaded, isSignedIn, user?.id]);
+
+  useEffect(() => {
+    resolveViewer();
+  }, [resolveViewer]);
 
   // ========= FETCH PET INFO ==========
   const fetchPetInfo = useCallback(async () => {
@@ -50,7 +90,11 @@ export default function CreatePost() {
       .eq("id", pet_id)
       .single();
 
-    if (!error) setPetInfo(data);
+    if (error) {
+      console.error("Error fetchPetInfo:", error.message);
+      return;
+    }
+    setPetInfo(data);
   }, [pet_id]);
 
   useEffect(() => {
@@ -68,7 +112,9 @@ export default function CreatePost() {
       quality: 1,
     });
 
-    if (!result.canceled) setMediaFiles((prev) => [...prev, ...result.assets]);
+    if (!result.canceled) {
+      setMediaFiles((prev) => [...prev, ...(result.assets || [])]);
+    }
   };
 
   const takeMedia = async () => {
@@ -80,7 +126,9 @@ export default function CreatePost() {
       quality: 1,
     });
 
-    if (!result.canceled) setMediaFiles((prev) => [...prev, ...result.assets]);
+    if (!result.canceled) {
+      setMediaFiles((prev) => [...prev, ...(result.assets || [])]);
+    }
   };
 
   const uploadToStorage = async (fileUri, fileName, mimeType) => {
@@ -99,20 +147,35 @@ export default function CreatePost() {
   // ========= POST ==========
   const handlePost = async () => {
     if (isPosting) return;
-    if (!description.trim() && mediaFiles.length === 0) {
-      alert("Escribe algo o agrega al menos una foto/video.");
+
+    // ✅ obligatoria: al menos 1 media
+    if (mediaFiles.length === 0) {
+      Alert.alert(
+        "Falta contenido",
+        "Debes agregar al menos una imagen o video para poder publicar."
+      );
+      return;
+    }
+
+    // ✅ usuario resuelto
+    if (!viewerId) {
+      Alert.alert(
+        "No se pudo publicar",
+        "No se pudo identificar tu usuario. Intenta cerrar sesión y volver a entrar."
+      );
       return;
     }
 
     setIsPosting(true);
 
     try {
+      // 1) Crear post con user_id del usuario en sesión
       const { data: post, error: postError } = await supabase
         .from("post")
         .insert({
           description,
           pet_id,
-          user_id,
+          user_id: viewerId, // ✅ AQUÍ el cambio
           likes,
           comments,
         })
@@ -120,19 +183,22 @@ export default function CreatePost() {
         .single();
 
       if (postError) {
-        console.error(postError);
-        setIsPosting(false);
+        console.error("postError:", postError);
+        Alert.alert("Error", "No se pudo crear la publicación.");
         return;
       }
 
       const postId = post.id;
 
-      // Subir media
+      // 2) Subir media
       for (const asset of mediaFiles) {
         try {
           const fileUri = asset.uri;
-          const ext = fileUri.split(".").pop();
+          if (!fileUri) continue;
+
+          const ext = (fileUri.split(".").pop() || "jpg").toLowerCase();
           const mimeType = getMimeType(fileUri);
+
           const fileName = `${Date.now()}-${Math.random()
             .toString(36)
             .slice(2)}.${ext}`;
@@ -143,7 +209,10 @@ export default function CreatePost() {
             mimeType
           );
 
-          if (storageError) continue;
+          if (storageError) {
+            console.error("storageError:", storageError);
+            continue;
+          }
 
           const {
             data: { publicUrl },
@@ -151,10 +220,12 @@ export default function CreatePost() {
 
           await supabase.from("media_post").insert({
             source: publicUrl,
-            type: mimeType.startsWith("video") ? "video" : "image",
+            type: mimeType === "video" ? "video" : "image",
             post_id: postId,
           });
-        } catch {}
+        } catch (e) {
+          console.error("Error subiendo asset:", e?.message || e);
+        }
       }
 
       router.back();
@@ -201,9 +272,11 @@ export default function CreatePost() {
 
   const petPic = petInfo?.media_pet?.[0]?.source;
 
+  const disablePublish =
+    isPosting || mediaFiles.length === 0 || resolvingUser || !viewerId;
+
   return (
     <View className="flex-1 bg-slate-50">
-      {/* HEADER — ahora con ArrowLeft */}
       <Stack.Screen
         options={{
           headerTransparent: true,
@@ -232,9 +305,6 @@ export default function CreatePost() {
         colors={["#f97316", "#fb923c"]}
         className="h-52 px-5 pt-12 pb-3 rounded-b-3xl"
       >
-        {/* <Text className="text-white text-3xl font-bold">Nuevo Post</Text> */}
-
-        {/* INFO DE LA MASCOTA */}
         {petInfo && (
           <View className="flex-row items-center mt-7">
             <Image
@@ -253,7 +323,6 @@ export default function CreatePost() {
         )}
       </LinearGradient>
 
-      {/* CONTENIDO */}
       <ScrollView
         className="flex-1 -mt-10 px-4"
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -301,12 +370,12 @@ export default function CreatePost() {
 
           <TouchableOpacity
             onPress={handlePost}
-            disabled={isPosting}
+            disabled={disablePublish}
             className={`mt-5 rounded-xl py-3 items-center justify-center ${
-              isPosting ? "bg-blue-400" : "bg-blue-600"
+              disablePublish ? "bg-blue-400" : "bg-blue-600"
             }`}
           >
-            {isPosting ? (
+            {isPosting || resolvingUser ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text className="text-white font-semibold text-base">

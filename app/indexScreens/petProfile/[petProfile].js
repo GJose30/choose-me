@@ -21,6 +21,7 @@ import { PetProfileModal } from "../../../components/petProfile/PetProfileModal"
 import { PetShareModal } from "../../../components/petProfile/PetShareModal";
 import { supabase } from "../../../lib/supabase";
 import { LinearGradient } from "expo-linear-gradient";
+import { Alert } from "react-native";
 
 export default function PetProfile() {
   const screenWidth = Dimensions.get("window").width;
@@ -160,6 +161,52 @@ export default function PetProfile() {
     [CELL]
   );
 
+  // dentro de PetProfile() agrega esta función:
+  const handleDeletePet = useCallback(
+    async (petId) => {
+      if (!petId) return;
+
+      try {
+        // (Opcional) Si quieres confirmar aquí en vez de en el modal:
+        // Si ya lo confirmas en el modal, puedes quitar este Alert.
+        Alert.alert(
+          "Eliminar mascota",
+          "¿Seguro que quieres eliminar esta mascota? Esta acción no se puede deshacer.",
+          [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Eliminar",
+              style: "destructive",
+              onPress: async () => {
+                const { error } = await supabase
+                  .from("pet")
+                  .delete()
+                  .eq("id", String(petId));
+
+                if (error) {
+                  Alert.alert("Error", error.message);
+                  return;
+                }
+
+                // Limpia UI local
+                setPet(null);
+                setPosts([]);
+                setQualities([]);
+
+                // Cierra modal y vuelve atrás
+                setPetProfileModalVisible(false);
+                router.back();
+              },
+            },
+          ]
+        );
+      } catch (e) {
+        Alert.alert("Error", e?.message ?? "No se pudo eliminar la mascota.");
+      }
+    },
+    [router]
+  );
+
   // ---------- HEADER ----------
   const renderHeader = useCallback(() => {
     // const ownerId = pet?.user_id ?? posts?.[0]?.user?.[0]?.id ?? "";
@@ -192,9 +239,9 @@ export default function PetProfile() {
             </Text>
 
             <View className="flex-row ml-auto gap-4">
-              <Pressable onPress={handleLike}>
+              {/* <Pressable onPress={handleLike}>
                 <Heart color={liked ? "red" : "#374151"} size={24} />
-              </Pressable>
+              </Pressable> */}
 
               {/* Abre modal de compartir (renderizado afuera) */}
               <Pressable onPress={() => setPetShareModalVisible(true)}>
@@ -247,7 +294,7 @@ export default function PetProfile() {
         </View>
 
         {/* ---------- FOOTER: perfil + botones ---------- */}
-        <View className="bg-white pb-6">
+        <View className="bg-white pb-2">
           <View className="flex-row items-center px-5 pt-2 pb-3 gap-x-3">
             {/* Perfil dinámico */}
             <Pressable
@@ -284,8 +331,7 @@ export default function PetProfile() {
             </Pressable>
           </View>
 
-          <View className="flex-row px-5 gap-x-[5px]">
-            {/* ADOPTAR */}
+          {/* <View className="flex-row px-5 gap-x-[5px]">
             <View
               className="flex-[0.8] rounded-2xl my-2 shadow"
               style={{ elevation: 5, backgroundColor: "#ff8b44" }}
@@ -301,7 +347,6 @@ export default function PetProfile() {
               </Pressable>
             </View>
 
-            {/* MENSAJE */}
             <View
               className="flex-[0.2] rounded-2xl my-2 shadow"
               style={{ elevation: 5, backgroundColor: "#f9fafb" }}
@@ -314,7 +359,7 @@ export default function PetProfile() {
                 <MessageIcon color="#ff8b44" size={27} />
               </Pressable>
             </View>
-          </View>
+          </View> */}
         </View>
       </>
     );
@@ -362,11 +407,13 @@ export default function PetProfile() {
         visible={petShareModalVisible}
         onClose={() => setPetShareModalVisible(false)}
       />
+
       <PetProfileModal
         visible={petProfileModalVisible}
         onClose={() => setPetProfileModalVisible(false)}
-        selectedProfileIndex={pid} // o el índice/ID que corresponda
-        onReport={onReportPost}
+        selectedProfileIndex={pid}
+        onReport={(i) => console.log("report", i)}
+        onDeletePet={(id) => handleDeletePet(id)} // <-- aquí ya borra en BD
       />
 
       {/* 🔒 IMAGEN FIJA */}

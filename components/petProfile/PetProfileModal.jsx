@@ -14,6 +14,7 @@ export function PetProfileModal({
   onClose,
   selectedProfileIndex,
   onReport,
+  onDeletePet, // <-- NUEVO
 }) {
   const slideAnim = useRef(new Animated.Value(300)).current;
 
@@ -37,6 +38,7 @@ export function PetProfileModal({
       }).start();
     }
   }, [visible]);
+
   return (
     <Modal
       visible={visible}
@@ -57,6 +59,7 @@ export function PetProfileModal({
                 }}
                 className="bg-white rounded-t-2xl p-4"
               >
+                {/* Existente: Reportar */}
                 <Text
                   className="text-red-600 text-center py-3 text-base font-semibold"
                   onPress={() => {
@@ -66,11 +69,24 @@ export function PetProfileModal({
                 >
                   Reportar Comentario
                 </Text>
+
+                {/* Cancelar */}
                 <Text
                   className="text-gray-500 text-center py-3 text-base font-semibold"
                   onPress={cerrarModalConAnimacion}
                 >
                   Cancelar
+                </Text>
+
+                {/* NUEVO: Eliminar mascota */}
+                <Text
+                  className="text-red-700 text-center py-3 text-base font-semibold"
+                  onPress={() => {
+                    onDeletePet?.(selectedProfileIndex); // <-- llama al callback
+                    cerrarModalConAnimacion();
+                  }}
+                >
+                  Eliminar mascota
                 </Text>
               </Animated.View>
             </TouchableWithoutFeedback>

@@ -1,4 +1,10 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -8,9 +14,11 @@ import {
   FlatList,
   RefreshControl,
   DeviceEventEmitter,
+  Alert,
+  ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Heart, Dots, Bookmark, MessageIcon } from "../../components/Icon";
-import { MessageOptions } from "../../components/Index/MessageOptions";
 import { Slider } from "../../components/Index/Slider";
 import { PostModal } from "../../components/Index/PostModal";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
@@ -32,8 +40,49 @@ function tiempoTranscurrido(fechaISO) {
   return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
 }
 
+const FALLBACK_AVATAR =
+  "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png";
+
+function CommentOptionsModal({ visible, onClose, canDelete, onDelete }) {
+  if (!visible) return null;
+  return (
+    <Modal
+      transparent
+      animationType="fade"
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <Pressable className="flex-1 bg-black/30 justify-end" onPress={onClose}>
+        <Pressable className="bg-white rounded-t-3xl px-4" onPress={() => {}}>
+          {canDelete ? (
+            <Pressable
+              className="py-4 border-b border-gray-100"
+              onPress={() => {
+                onClose?.();
+                onDelete?.();
+              }}
+            >
+              <Text className="text-center text-red-600 font-semibold text-base">
+                Eliminar comentario
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable className="py-4" onPress={onClose}>
+            <Text className="text-center text-gray-600 font-semibold text-base">
+              Cancelar
+            </Text>
+          </Pressable>
+
+          <View className="h-4" />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function Comment() {
-  const { index } = useLocalSearchParams(); // ← solo usamos index
+  const { index } = useLocalSearchParams();
   const postId = String(index);
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
@@ -45,51 +94,74 @@ export default function Comment() {
 
   // datos UI
   const [newComment, setNewComment] = useState("");
-  const [optionsVisible, setOptionsVisible] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(null);
   const [postModalVisible, setPostModalVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showVerMas, setShowVerMas] = useState(false);
   const [comment, setComment] = useState([]);
   const [post, setPost] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCommentId, setSelectedCommentId] = useState(null);
-  const likeCommentRef = useRef(false);
 
-  // refs anti-doble toque
+  // comment options
+  const [commentOptionsVisible, setCommentOptionsVisible] = useState(false);
+  const [selectedComment, setSelectedComment] = useState(null); // item completo
+
+  // delete/edit permission
+  const [canDeletePost, setCanDeletePost] = useState(false);
+  const [canEditPost, setCanEditPost] = useState(false);
+
+  const likeCommentRef = useRef(false);
   const likeRef = useRef(false);
   const bookmarkRef = useRef(false);
+
+  const isEdited = useMemo(() => {
+    if (!post?.updated_at || !post?.created_at) return false;
+    return (
+      new Date(post.updated_at).getTime() > new Date(post.created_at).getTime()
+    );
+  }, [post?.updated_at, post?.created_at]);
 
   // ---------- RESOLVER VIEWER ----------
   const resolveViewer = useCallback(async () => {
     if (!isLoaded || !isSignedIn) return;
+
     const { data, error } = await supabase
       .from("user")
       .select("id")
       .eq("clerk_id", user.id)
       .single();
-    if (!error && data?.id) setViewerId(data.id);
+
+    if (!error && data?.id) setViewerId(String(data.id));
   }, [isLoaded, isSignedIn, user?.id]);
 
   useEffect(() => {
     resolveViewer();
   }, [resolveViewer]);
 
-  // ---------- FETCHES ----------
+  // ---------- FETCH POST ----------
   const fetchPost = useCallback(async () => {
+    if (!postId) return;
+
     const { data, error } = await supabase
       .from("post")
-      .select(`*, media_post(*), comment(*), pet(*)`)
+      .select(`*, media_post(*), comment(*), pet (*, media_pet(*))`)
       .eq("id", postId)
       .single();
+
     if (!error && data) setPost(data);
   }, [postId]);
+
+  // ✅ calcular permisos post
+  useEffect(() => {
+    if (!post || !viewerId) return;
+    const isOwner = String(post.user_id) === String(viewerId);
+    setCanDeletePost(isOwner);
+    setCanEditPost(isOwner);
+  }, [post, viewerId]);
 
   // Combina los comentarios + likes del viewer
   const fetchCommentWithLikes = useCallback(async () => {
     if (!postId || !viewerId) return;
 
-    // 1️⃣ Traer todos los comentarios del post
     const { data: comments, error } = await supabase
       .from("comment")
       .select(`*, user(*)`)
@@ -98,32 +170,27 @@ export default function Comment() {
 
     if (error || !comments) return;
 
-    // 2️⃣ Obtener los ids de los comentarios
     const commentIds = comments.map((c) => c.id);
 
-    // 3️⃣ Traer los likes del usuario actual en esos comentarios
     const { data: myLikes } = await supabase
       .from("comment_likes")
       .select("comment_id")
       .eq("user_id", viewerId)
       .in("comment_id", commentIds);
 
-    // 4️⃣ Crear un Set para búsquedas rápidas
     const likedSet = new Set(myLikes?.map((r) => r.comment_id));
 
-    // 5️⃣ Combinar resultados
     const commentsWithLiked = comments.map((c) => ({
       ...c,
       liked: likedSet.has(c.id),
     }));
 
-    // 6️⃣ Guardar en estado
     setComment(commentsWithLiked);
   }, [postId, viewerId]);
 
   const loadViewerReactions = useCallback(async () => {
     if (!viewerId || !postId) return;
-    // like
+
     const { data: likeRows } = await supabase
       .from("post_likes")
       .select("id")
@@ -131,7 +198,7 @@ export default function Comment() {
       .eq("user_id", viewerId)
       .limit(1);
     setLiked(!!(likeRows && likeRows.length));
-    // bookmark
+
     const { data: bmRows } = await supabase
       .from("post_bookmarks")
       .select("id")
@@ -158,19 +225,37 @@ export default function Comment() {
     handleRefresh();
   }, [postId, viewerId, handleRefresh]);
 
-  // extra: si el viewer aparece luego (por auth), revalida reacciones
+  // ✅ si vuelves de EditPost, refresca el post en Comment
   useEffect(() => {
-    if (viewerId && postId) {
-      loadViewerReactions();
-    }
-  }, [viewerId, postId, loadViewerReactions]);
+    const sub = DeviceEventEmitter.addListener("post:updated", (payload) => {
+      if (!payload?.postId) return;
+      if (String(payload.postId) !== String(postId)) return;
+
+      // update rápido en UI
+      setPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              description: payload.description ?? prev.description,
+              updated_at: payload.updated_at ?? prev.updated_at,
+            }
+          : prev
+      );
+
+      // refresco real desde DB (por si cambió más)
+      fetchPost();
+    });
+
+    return () => sub.remove();
+  }, [postId, fetchPost]);
 
   // ---------- NOTIFICACIONES ----------
   const ensureNotification = async (thePostId) => {
     try {
-      const recipientId = post?.user_id; // dueño del post
+      const recipientId = post?.user_id;
       const actorId = viewerId;
-      if (!recipientId || !actorId || recipientId === actorId) return;
+      if (!recipientId || !actorId || String(recipientId) === String(actorId))
+        return;
 
       const { data: existing, error: selErr } = await supabase
         .from("notification")
@@ -180,10 +265,7 @@ export default function Comment() {
         .eq("notification_type", "like")
         .limit(1);
 
-      if (selErr) {
-        console.error("Error consultando notificación:", selErr.message);
-        return;
-      }
+      if (selErr) return;
       if (existing?.length) return;
 
       await supabase.from("notification").insert([
@@ -201,37 +283,6 @@ export default function Comment() {
   };
 
   // ---------- LIKE POST ----------
-  const handleTapLike = async () => {
-    if (likeRef.current) return;
-    likeRef.current = true;
-
-    const willLike = !liked;
-    const delta = willLike ? 1 : -1;
-
-    try {
-      setLiked(willLike); // optimista
-
-      await persistLikeDelta(delta);
-      await persistUserLike(willLike);
-
-      DeviceEventEmitter.emit("post:likeChanged", {
-        postId: String(postId),
-        liked: willLike,
-        delta,
-      });
-
-      if (willLike) ensureNotification?.(postId);
-
-      // 🔄 revalidar estado desde BD para que el icono coincida siempre
-      await loadViewerReactions();
-    } catch (e) {
-      setLiked((prev) => !prev);
-      console.error("Error actualizando like:", e?.message || e);
-    } finally {
-      likeRef.current = false;
-    }
-  };
-
   const persistLikeDelta = async (delta) => {
     const { data, error } = await supabase
       .from("post")
@@ -257,6 +308,7 @@ export default function Comment() {
       const { error } = await supabase
         .from("post_likes")
         .insert({ post_id: postId, user_id: viewerId });
+
       if (error) {
         const msg = (error.message || JSON.stringify(error)).toLowerCase();
         if (
@@ -278,32 +330,35 @@ export default function Comment() {
     }
   };
 
-  // ---------- BOOKMARK POST ----------
-  const handleTapBookmark = async () => {
-    if (bookmarkRef.current) return;
-    bookmarkRef.current = true;
+  const handleTapLike = async () => {
+    if (likeRef.current) return;
+    likeRef.current = true;
 
-    const willBookmark = !bookmarked;
+    const willLike = !liked;
+    const delta = willLike ? 1 : -1;
 
     try {
-      setBookmarked(willBookmark); // optimista
-      await persistUserBookmark(willBookmark);
+      setLiked(willLike);
+      await persistLikeDelta(delta);
+      await persistUserLike(willLike);
 
-      DeviceEventEmitter.emit("post:bookmarkChanged", {
+      DeviceEventEmitter.emit("post:likeChanged", {
         postId: String(postId),
-        bookmarked: willBookmark,
+        liked: willLike,
+        delta,
       });
 
-      // 🔄 revalidar estado desde BD
+      if (willLike) ensureNotification?.(postId);
       await loadViewerReactions();
     } catch (e) {
-      setBookmarked((prev) => !prev);
-      console.error("Error actualizando bookmark:", e?.message || e);
+      setLiked((prev) => !prev);
+      console.error("Error actualizando like:", e?.message || e);
     } finally {
-      bookmarkRef.current = false;
+      likeRef.current = false;
     }
   };
 
+  // ---------- BOOKMARK POST ----------
   const persistUserBookmark = async (willBookmark) => {
     if (!viewerId) throw new Error("viewerId no definido");
 
@@ -311,6 +366,7 @@ export default function Comment() {
       const { error } = await supabase
         .from("post_bookmarks")
         .insert({ post_id: postId, user_id: viewerId });
+
       if (error) {
         const msg = (error.message || JSON.stringify(error)).toLowerCase();
         if (
@@ -332,19 +388,122 @@ export default function Comment() {
     }
   };
 
+  const handleTapBookmark = async () => {
+    if (bookmarkRef.current) return;
+    bookmarkRef.current = true;
+
+    const willBookmark = !bookmarked;
+
+    try {
+      setBookmarked(willBookmark);
+      await persistUserBookmark(willBookmark);
+
+      DeviceEventEmitter.emit("post:bookmarkChanged", {
+        postId: String(postId),
+        bookmarked: willBookmark,
+      });
+
+      await loadViewerReactions();
+    } catch (e) {
+      setBookmarked((prev) => !prev);
+      console.error("Error actualizando bookmark:", e?.message || e);
+    } finally {
+      bookmarkRef.current = false;
+    }
+  };
+
+  // ✅✅ DELETE POST (tabla post)
+  const handleDeletePost = useCallback(() => {
+    if (!postId || !viewerId) return;
+
+    if (String(post?.user_id) !== String(viewerId)) return;
+
+    Alert.alert(
+      "Eliminar publicación",
+      "¿Seguro que deseas eliminar esta publicación? Esta acción no se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("post")
+                .delete()
+                .eq("id", postId);
+
+              if (error) {
+                console.error("Error eliminando post:", error.message);
+                Alert.alert("Error", "No se pudo eliminar la publicación.");
+                return;
+              }
+
+              DeviceEventEmitter.emit("post:deleted", {
+                postId: String(postId),
+              });
+
+              setPostModalVisible(false);
+              router.back();
+            } catch (e) {
+              console.error("handleDeletePost exception:", e?.message || e);
+              Alert.alert(
+                "Error",
+                "Ocurrió un error eliminando la publicación."
+              );
+            }
+          },
+        },
+      ]
+    );
+  }, [postId, viewerId, post?.user_id, router]);
+
+  // ✅ NUEVO: ir a editar post
+  const handleEditPost = useCallback(
+    (id) => {
+      if (!id) return;
+      router.push({
+        pathname: "indexScreens/editPost/[id]",
+        params: { postId: String(id) },
+      });
+    },
+    [router]
+  );
+
   // ---------- COMMENTS ----------
+  const persistCommentDelta = async (delta) => {
+    const { data, error } = await supabase
+      .from("post")
+      .select("comments")
+      .eq("id", postId)
+      .single();
+    if (error) throw error;
+
+    const newCount = Math.max((data?.comments ?? 0) + delta, 0);
+    const { error: upErr } = await supabase
+      .from("post")
+      .update({ comments: newCount })
+      .eq("id", postId);
+    if (upErr) throw upErr;
+
+    return newCount;
+  };
+
   const handleAddComment = async (thePostId) => {
     if (newComment.trim() === "") return;
 
     const clerkId = user?.id;
     if (!clerkId) {
-      alert("Debes iniciar sesión para comentar.");
+      Alert.alert(
+        "Debes iniciar sesión",
+        "Debes iniciar sesión para comentar."
+      );
       return;
     }
 
     const { data: supaUser, error: supaErr } = await supabase
       .from("user")
-      .select("id, username")
+      .select("id, username, profile_pic")
       .eq("clerk_id", clerkId)
       .single();
     if (supaErr || !supaUser) return;
@@ -373,7 +532,12 @@ export default function Comment() {
       setComment((prev) => [
         {
           id: inserted.id,
-          user: { username: supaUser.username || "Tú" },
+          user_id: supaUser.id,
+          user: {
+            id: supaUser.id,
+            username: supaUser.username || "Tú",
+            profile_pic: supaUser.profile_pic || FALLBACK_AVATAR,
+          },
           content: newComment.trim(),
           created_at: inserted.created_at,
           liked: false,
@@ -385,12 +549,17 @@ export default function Comment() {
     }
   };
 
-  const handleDeleteComment = async (id) => {
-    if (!id) return;
+  const handleDeleteComment = async (commentId) => {
+    if (!commentId) return;
+
     const prev = [...comment];
-    setComment((curr) => curr.filter((c) => c.id !== id));
+    setComment((curr) => curr.filter((c) => c.id !== commentId));
+
     try {
-      const { error } = await supabase.from("comment").delete().eq("id", id);
+      const { error } = await supabase
+        .from("comment")
+        .delete()
+        .eq("id", commentId);
       await persistCommentDelta(-1);
 
       DeviceEventEmitter.emit("post:commentChanged", {
@@ -402,30 +571,14 @@ export default function Comment() {
     } catch (e) {
       console.error("Error eliminando comentario:", e.message);
       setComment(prev);
-      alert("No se pudo eliminar el comentario. Intenta de nuevo.");
+      Alert.alert(
+        "Error",
+        "No se pudo eliminar el comentario. Intenta de nuevo."
+      );
     }
   };
 
-  const persistCommentDelta = async (delta) => {
-    const { data, error } = await supabase
-      .from("post")
-      .select("comments")
-      .eq("id", postId)
-      .single();
-    if (error) throw error;
-
-    const newCount = Math.max((data?.comments ?? 0) + delta, 0);
-    const { error: upErr } = await supabase
-      .from("post")
-      .update({ comments: newCount })
-      .eq("id", postId);
-    if (upErr) throw upErr;
-
-    return newCount;
-  };
-
   const bumpCommentLikesCounter = async (commentId, delta) => {
-    // lee el valor actual
     const { data, error } = await supabase
       .from("comment")
       .select("likes")
@@ -451,7 +604,6 @@ export default function Comment() {
     try {
       const delta = wasLiked ? -1 : +1;
 
-      // UI optimista
       setComment((prev) =>
         prev.map((c) =>
           c.id === commentId
@@ -483,10 +635,8 @@ export default function Comment() {
         if (error) throw error;
       }
 
-      // 👇 ACTUALIZA el contador real en BD
       await bumpCommentLikesCounter(commentId, delta);
     } catch (e) {
-      // Revertir UI si algo falla
       setComment((prev) =>
         prev.map((c) =>
           c.id === commentId
@@ -510,7 +660,17 @@ export default function Comment() {
     post.media_post.map((m) => ({ type: m.type, source: m.source }));
 
   const onTextLayout = (e) => setShowVerMas(e.nativeEvent.lines.length > 2);
+
   const keyExtractor = useCallback((item) => String(item.id), []);
+
+  if (!post) {
+    return (
+      <View className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" />
+        <Text className="mt-2 text-gray-500">Cargando publicación...</Text>
+      </View>
+    );
+  }
 
   const ListHeader = (
     <View>
@@ -520,21 +680,22 @@ export default function Comment() {
           onPress={() =>
             router.push({
               pathname: "indexScreens/petProfile/[id]",
-              params: {
-                pet_id: post?.pet?.id,
-              },
+              params: { pet_id: post?.pet?.id },
             })
           }
           className="flex-row gap-2 items-center"
         >
           <Image
             className="w-10 h-10 rounded-full"
-            source={{ uri: post?.pet?.logo }}
+            source={{
+              uri: post?.pet?.media_pet?.[0]?.source || FALLBACK_AVATAR,
+            }}
           />
           <View>
             <Text className="text-gray-700 font-medium">{post?.pet?.name}</Text>
             <Text className="text-gray-400 text-sm">
               {tiempoTranscurrido(post?.created_at)}
+              {isEdited ? " • Editado" : ""}
             </Text>
           </View>
         </Pressable>
@@ -551,9 +712,18 @@ export default function Comment() {
           onClose={() => setPostModalVisible(false)}
           selectedPostIndex={postId}
           onSave={handleTapBookmark}
+          onHidePost={() => {}}
           onReport={() =>
-            alert(`Publicación reportada: ${post?.pet?.name || "Mascota"}`)
+            Alert.alert(
+              "Reporte",
+              `Publicación reportada: ${post?.pet?.name || "Mascota"}`
+            )
           }
+          canDelete={canDeletePost}
+          onDelete={handleDeletePost}
+          // ✅ NUEVO
+          canEdit={canEditPost}
+          onEdit={handleEditPost}
         />
       </View>
 
@@ -565,7 +735,6 @@ export default function Comment() {
       {/* ACCIONES */}
       <View className="flex-row gap-4 mt-2 mx-4 items-center">
         <Pressable onPress={handleTapLike} className="flex-row items-center">
-          {/* Si tus iconos soportan 'filled', pásalo así: <Heart filled={liked} ... /> */}
           <Heart color={liked ? "red" : "#374151"} size={24} />
         </Pressable>
 
@@ -574,7 +743,6 @@ export default function Comment() {
         </Pressable>
 
         <Pressable onPress={handleTapBookmark} className="ml-auto">
-          {/* Igual para bookmark: <Bookmark filled={bookmarked} ... /> si está disponible */}
           <Bookmark color={bookmarked ? "orange" : "#374151"} size={24} />
         </Pressable>
       </View>
@@ -620,77 +788,95 @@ export default function Comment() {
           headerTitle: "Comentarios",
         }}
       />
+
       <FlatList
         data={comment}
         keyExtractor={keyExtractor}
-        renderItem={({ item, index }) => (
-          <View className="px-4">
-            <Pressable
-              className="flex-row gap-x-1"
-              onPress={() =>
-                router.push({
-                  pathname: "indexScreens/profile/[id]",
-                  params: { index: item.user?.id },
-                })
-              }
-            >
-              <Image
-                className="h-5 w-5 rounded-full"
-                source={{ uri: item.user?.profile_pic }}
-              />
-              <Text className="text-gray-800 font-medium">
-                {item.user?.username}
-              </Text>
-            </Pressable>
-            <Pressable
-              onLongPress={() => {
-                setSelectedIndex(index);
-                setOptionsVisible(true);
-                setSelectedCommentId(item.id);
-              }}
-            >
-              <View className="flex-row items-center mb-2">
-                <View className="pb-1">
-                  <Text className="text-gray-600">{item.content}</Text>
-                  <Text className="text-gray-400 text-sm">
-                    {tiempoTranscurrido(item.created_at)}
-                  </Text>
-                </View>
+        ListHeaderComponent={ListHeader}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+        renderItem={({ item }) => {
+          const canDeleteThisComment =
+            !!viewerId && String(item.user_id) === String(viewerId);
+
+          return (
+            <View className="px-4 py-3 border-b border-gray-100">
+              <View className="flex-row items-start">
                 <Pressable
-                  onPress={() => handleLikeComment(item.id, item.liked)}
-                  className="ml-auto flex-row items-center"
+                  className="flex-row gap-x-2 items-center"
+                  onPress={() =>
+                    router.push({
+                      pathname: "indexScreens/profile/[id]",
+                      params: { index: item.user?.id },
+                    })
+                  }
                 >
-                  <Heart size={18} color={item.liked ? "red" : "#374151"} />
-                  <Text className="text-gray-600 ml-1">{item.likes}</Text>
+                  <Image
+                    className="h-7 w-7 rounded-full"
+                    source={{ uri: item.user?.profile_pic || FALLBACK_AVATAR }}
+                  />
+                  <View>
+                    <Text className="text-gray-800 font-medium">
+                      {item.user?.username || "Usuario"}
+                    </Text>
+                    <Text className="text-gray-400 text-xs">
+                      {tiempoTranscurrido(item.created_at)}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  className="ml-auto"
+                  onPress={() => {
+                    setSelectedComment(item);
+                    setCommentOptionsVisible(true);
+                  }}
+                >
+                  <Dots color={"#111827"} size={18} />
                 </Pressable>
               </View>
-            </Pressable>
-          </View>
-        )}
-        ListHeaderComponent={ListHeader}
-        ListFooterComponent={
-          <MessageOptions
-            visible={optionsVisible}
-            onClose={() => setOptionsVisible(false)}
-            selectedCommentIndex={selectedIndex}
-            selectedCommentId={selectedCommentId}
-            onDelete={(id) => handleDeleteComment(id)}
-            onReport={(id) => {
-              const u =
-                comment.find((c) => c.id === id)?.user?.username ||
-                "desconocido";
-              alert(`Comentario reportado: ${u}`);
-            }}
-          />
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#ff8b44"
-          />
-        }
-        contentContainerStyle={{ paddingBottom: 20 }}
+
+              <View className="flex-row items-center">
+                <Text className="text-gray-800 mt-2">{item.content}</Text>
+                <Pressable
+                  onPress={() => handleLikeComment(item.id, !!item.liked)}
+                  className="flex-row items-center ml-auto"
+                >
+                  <Heart color={item.liked ? "red" : "#374151"} size={18} />
+                  <Text className="ml-2 text-gray-600 text-sm">
+                    {item.likes ?? 0}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <CommentOptionsModal
+                visible={
+                  commentOptionsVisible && selectedComment?.id === item.id
+                }
+                onClose={() => {
+                  setCommentOptionsVisible(false);
+                  setSelectedComment(null);
+                }}
+                canDelete={canDeleteThisComment}
+                onDelete={() => {
+                  Alert.alert(
+                    "Eliminar comentario",
+                    "¿Seguro que deseas eliminar este comentario?",
+                    [
+                      { text: "Cancelar", style: "cancel" },
+                      {
+                        text: "Eliminar",
+                        style: "destructive",
+                        onPress: () => handleDeleteComment(item.id),
+                      },
+                    ]
+                  );
+                }}
+              />
+            </View>
+          );
+        }}
       />
     </View>
   );

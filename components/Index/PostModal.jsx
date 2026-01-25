@@ -1,3 +1,4 @@
+import React, { useEffect, useRef } from "react";
 import {
   Modal,
   View,
@@ -6,8 +7,8 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Animated,
+  Pressable,
 } from "react-native";
-import { useEffect, useRef } from "react";
 
 export function PostModal({
   visible,
@@ -16,26 +17,25 @@ export function PostModal({
   onSave,
   onHidePost,
   onReport,
+
+  // permisos + acciones
+  canDelete,
+  onDelete,
+
+  // ✅ NUEVO
+  canEdit,
+  onEdit,
 }) {
   const slideAnim = useRef(new Animated.Value(300)).current;
 
   const cerrarModalConAnimacion = () => {
     Animated.timing(slideAnim, {
       toValue: 300,
-      duration: 300,
+      duration: 250,
       useNativeDriver: true,
     }).start(() => {
-      onClose();
+      onClose?.();
     });
-  };
-
-  const handlePressSave = async () => {
-    try {
-      await onSave?.(); // 👈 la ejecutas
-      onClose?.(); // opcional: cierras el modal después
-    } catch (e) {
-      console.error(e);
-    }
   };
 
   useEffect(() => {
@@ -43,19 +43,38 @@ export function PostModal({
       slideAnim.setValue(300);
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 250,
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]);
+  }, [visible, slideAnim]);
+
+  const Item = ({ text, danger, onPress }) => (
+    <Pressable
+      onPress={onPress}
+      className="py-4"
+      style={{
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+      }}
+    >
+      <Text
+        className={`text-center text-base font-semibold ${
+          danger ? "text-red-600" : "text-gray-800"
+        }`}
+      >
+        {text}
+      </Text>
+    </Pressable>
+  );
 
   return (
     <Modal
-      visible={visible}
+      visible={!!visible}
       transparent
       animationType="none"
       onRequestClose={cerrarModalConAnimacion}
-      statusBarTranslucent={true}
+      statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -65,40 +84,69 @@ export function PostModal({
           <View className="flex-1 bg-black/20 justify-end">
             <TouchableWithoutFeedback onPress={() => {}}>
               <Animated.View
-                style={{
-                  transform: [{ translateY: slideAnim }],
-                }}
-                className="bg-white rounded-t-2xl p-4"
+                style={{ transform: [{ translateY: slideAnim }] }}
+                className="bg-white rounded-t-2xl px-4"
               >
-                <Text
-                  className="text-gray-800 text-center py-3 text-base font-semibold"
-                  onPress={() => handlePressSave()}
-                >
-                  Guardar
-                </Text>
-                <Text
-                  className="text-gray-800 text-center py-3 text-base font-semibold"
+                {/* ✅ NUEVO: Editar (solo dueño) */}
+                {canEdit ? (
+                  <Item
+                    text="Editar publicación"
+                    onPress={() => {
+                      cerrarModalConAnimacion();
+                      onEdit?.(selectedPostIndex);
+                    }}
+                  />
+                ) : null}
+
+                <Item
+                  text="Guardar"
+                  onPress={async () => {
+                    try {
+                      await onSave?.();
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      cerrarModalConAnimacion();
+                    }
+                  }}
+                />
+
+                <Item
+                  text="Ocultar"
                   onPress={() => {
-                    onHidePost(selectedPostIndex);
+                    onHidePost?.(selectedPostIndex);
                     cerrarModalConAnimacion();
                   }}
-                >
-                  Ocultar
-                </Text>
-                <Text
-                  className="text-red-600 text-center py-3 text-base font-semibold"
+                />
+
+                {canDelete ? (
+                  <Item
+                    text="Eliminar publicación"
+                    danger
+                    onPress={() => {
+                      // tu confirm + delete lo hace onDelete
+                      cerrarModalConAnimacion();
+                      onDelete?.();
+                    }}
+                  />
+                ) : null}
+
+                <Item
+                  text="Reportar Publicación"
+                  danger
                   onPress={() => {
-                    onReport(selectedPostIndex);
+                    onReport?.(selectedPostIndex);
+                    cerrarModalConAnimacion();
                   }}
-                >
-                  Reportar Publicacion
-                </Text>
-                <Text
-                  className="text-gray-500 text-center py-3 text-base font-semibold"
-                  onPress={cerrarModalConAnimacion}
-                >
-                  Cancelar
-                </Text>
+                />
+
+                <Pressable onPress={cerrarModalConAnimacion} className="py-4">
+                  <Text className="text-gray-500 text-center text-base font-semibold">
+                    Cancelar
+                  </Text>
+                </Pressable>
+
+                <View className="h-4" />
               </Animated.View>
             </TouchableWithoutFeedback>
           </View>

@@ -9,9 +9,10 @@ import {
   TouchableWithoutFeedback,
   Animated,
 } from "react-native";
-import { Close } from "../Icon"; // ajusta la ruta según tu proyecto
+import { useRouter } from "expo-router";
 
 export function ChatModal({ visible, onClose, onBlock, onReport }) {
+  const router = useRouter();
   const slideAnim = useRef(new Animated.Value(300)).current;
 
   const cerrarModalConAnimacion = () => {
@@ -35,6 +36,12 @@ export function ChatModal({ visible, onClose, onBlock, onReport }) {
     }
   }, [visible]);
 
+  const handleCreateGroup = () => {
+    cerrarModalConAnimacion();
+    // ajusta el path a donde vayas a crear la pantalla
+    router.push("chat/createGroup");
+  };
+
   const handleReport = () => {
     onReport && onReport();
     cerrarModalConAnimacion();
@@ -51,39 +58,23 @@ export function ChatModal({ visible, onClose, onBlock, onReport }) {
       animationType="none"
       transparent
       onRequestClose={cerrarModalConAnimacion}
-      statusBarTranslucent={true}
+      statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
       >
-        {/* Fondo oscurecido */}
         <TouchableWithoutFeedback onPress={cerrarModalConAnimacion}>
           <View className="flex-1 bg-black/20 justify-end">
-            {/* Contenedor del sheet: evita que el toque se propague */}
             <TouchableWithoutFeedback onPress={() => {}}>
               <Animated.View
-                style={{
-                  transform: [{ translateY: slideAnim }],
-                }}
+                style={{ transform: [{ translateY: slideAnim }] }}
                 className="bg-white rounded-t-2xl w-full pb-6"
               >
-                {/* Handler superior */}
                 <View className="w-12 h-1 bg-gray-300 rounded-full self-center my-3" />
 
-                {/* Título + botón cerrar */}
-                {/* <View className="flex-row justify-between items-center px-4 mb-2">
-                  <Text className="text-lg font-semibold text-gray-800">
-                    Opciones del chat
-                  </Text>
-                  <Pressable onPress={cerrarModalConAnimacion}>
-                    <Close size={24} />
-                  </Pressable>
-                </View> */}
-
-                {/* Opciones */}
                 <View className="mt-2">
-                  <Pressable className="px-4 py-3" onPress={handleReport}>
+                  <Pressable className="px-4 py-3" onPress={handleCreateGroup}>
                     <Text className="text-red-500 font-semibold text-base">
                       Crear Grupo
                     </Text>

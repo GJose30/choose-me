@@ -1,5 +1,5 @@
 import { Tabs, Link, useFocusEffect } from "expo-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { View, Image, Pressable, Text } from "react-native";
 import {
   Home,
@@ -17,6 +17,9 @@ import { ChatModal } from "../../components/Index/ChatModal";
 import { useUser } from "@clerk/clerk-expo";
 import { supabase } from "../../lib/supabase";
 
+const FALLBACK_PROFILE_PIC =
+  "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg";
+
 export default function TabsLayout() {
   const [sideBarModarVisible, setSideBarModarVisible] = useState(false);
   const [chatOptionsVisible, setChatOptionsVisible] = useState(false);
@@ -25,33 +28,59 @@ export default function TabsLayout() {
   const [supaUserId, setSupaUserId] = useState(null);
   const [notifCount, setNotifCount] = useState(0);
 
+  // ✅ profile pic state
+  const [profilePic, setProfilePic] = useState(null);
+
   const { isLoaded, isSignedIn, user } = useUser();
 
-  // 1) Resolver usuario de Supabase por clerk_id
-  const fetchSupaUserId = useCallback(async () => {
-    if (!isLoaded || !isSignedIn) return;
+  // 1) Resolver usuario de Supabase por clerk_id (id + profile_pic)
+  const fetchSupaUser = useCallback(async () => {
+    if (!isLoaded || !isSignedIn || !user?.id) return;
+
     const { data, error } = await supabase
       .from("user")
-      .select("id")
+      .select("id, profile_pic")
       .eq("clerk_id", user.id)
-      .single();
-    if (!error && data?.id) setSupaUserId(data.id);
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetchSupaUser:", error.message);
+      return;
+    }
+
+    if (data?.id) setSupaUserId(String(data.id));
+    setProfilePic(data?.profile_pic || null);
   }, [isLoaded, isSignedIn, user?.id]);
 
   // 2) Contar notificaciones no leídas
   const fetchNotifCount = useCallback(async () => {
     if (!supaUserId) return;
+
     const { count, error } = await supabase
       .from("notification")
       .select("id", { count: "exact", head: true })
       .eq("user_id", supaUserId)
       .eq("is_read", false);
-    if (!error && typeof count === "number") setNotifCount(count);
+
+    if (error) {
+      console.error("Error fetchNotifCount:", error.message);
+      return;
+    }
+
+    if (typeof count === "number") setNotifCount(count);
   }, [supaUserId]);
 
   useEffect(() => {
-    fetchSupaUserId();
-  }, [fetchSupaUserId]);
+    fetchSupaUser();
+  }, [fetchSupaUser]);
+
+  // ✅ refrescar profile pic cuando vuelves a tabs (por si lo cambió en profile)
+  useFocusEffect(
+    useCallback(() => {
+      fetchSupaUser();
+      fetchNotifCount();
+    }, [fetchSupaUser, fetchNotifCount])
+  );
 
   // 3) Suscripción en tiempo real a notification
   useEffect(() => {
@@ -77,13 +106,6 @@ export default function TabsLayout() {
       supabase.removeChannel(channel);
     };
   }, [supaUserId, fetchNotifCount]);
-
-  // Refrescar al recuperar foco
-  useFocusEffect(
-    useCallback(() => {
-      fetchNotifCount();
-    }, [fetchNotifCount])
-  );
 
   const DrawerButton = () => (
     <View>
@@ -116,6 +138,12 @@ export default function TabsLayout() {
     <View className="items-center justify-center top-1 h-[38px] w-[38px]">
       {children}
     </View>
+  );
+
+  // ✅ uri final del tab profile
+  const profileTabUri = useMemo(
+    () => profilePic || FALLBACK_PROFILE_PIC,
+    [profilePic]
   );
 
   return (
@@ -201,14 +229,8 @@ export default function TabsLayout() {
               <ChatModal
                 visible={chatOptionsVisible}
                 onClose={() => setChatOptionsVisible(false)}
-                onReport={() => {
-                  // aquí puedes meter lógica real de "reportar"
-                  console.log("🚨 Reportar chat");
-                }}
-                onBlock={() => {
-                  // aquí puedes meter lógica real de "bloquear"
-                  console.log("⛔ Bloquear usuario");
-                }}
+                onReport={() => console.log("🚨 Reportar chat")}
+                onBlock={() => console.log("⛔ Bloquear usuario")}
               />
             </>
           ),
@@ -229,9 +251,7 @@ export default function TabsLayout() {
             <TabIconBox>
               <Image
                 className="h-8 w-8 rounded-full"
-                source={{
-                  uri: "https://t4.ftcdn.net/jpg/04/31/64/75/360_F_431647519_usrbQ8Z983hTYe8zgA7t1XVc5fEtqcpa.jpg",
-                }}
+                source={{ uri: profileTabUri }}
               />
             </TabIconBox>
           ),

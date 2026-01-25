@@ -306,7 +306,7 @@ export function PostItem({
         >
           <Image
             className="w-10 h-10 rounded-full"
-            source={{ uri: `${dataPost.pet.logo}` }}
+            source={{ uri: `${dataPost.pet.media_pet[0]?.source}` }}
           />
           <View>
             <Text className="text-gray-700 font-medium">

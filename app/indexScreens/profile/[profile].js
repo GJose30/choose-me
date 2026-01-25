@@ -18,6 +18,8 @@ import { useUser } from "@clerk/clerk-expo";
 const screenWidth = Dimensions.get("window").width;
 const IMAGE_SIZE = Math.floor(screenWidth / 3);
 
+const FALLBACK_PROFILE = "https://randomuser.me/api/portraits/men/32.jpg";
+
 // ---- Celdas memoizadas ----
 const PostCell = memo(function PostCell({ item }) {
   const router = useRouter();
@@ -58,7 +60,7 @@ const PetCard = memo(function PetCard({ item }) {
       onPress={() =>
         router.push({
           pathname: "indexScreens/petProfile/[id]",
-          params: { pet_id: String(item.id) }, // 👈 solo pet_id
+          params: { pet_id: String(item.id) },
         })
       }
     >
@@ -83,77 +85,6 @@ const PetCard = memo(function PetCard({ item }) {
   );
 });
 
-// const openChatWithUser = useCallback(
-//   async (peerUserId) => {
-//     if (!peerUserId) return;
-
-//     // 1) obtener usuario actual
-//     const { data: me, error: meError } = await supabase
-//       .from("user")
-//       .select("id")
-//       .eq("clerk_id", user.id)
-//       .maybeSingle();
-
-//     if (meError || !me?.id) {
-//       console.error("No se pudo obtener usuario actual");
-//       return;
-//     }
-
-//     const myUserId = me.id;
-
-//     // 2) buscar chat existente
-//     const { data: chats, error: chatError } = await supabase
-//       .from("chats")
-//       .select(
-//         `
-//       id,
-//       chat_members ( user_id )
-//     `
-//       )
-//       .eq("type", "dm");
-
-//     if (chatError) {
-//       console.error("Error buscando chats", chatError.message);
-//       return;
-//     }
-
-//     let chatId = null;
-
-//     for (const chat of chats || []) {
-//       const members = chat.chat_members.map((m) => m.user_id);
-//       if (members.includes(myUserId) && members.includes(peerUserId)) {
-//         chatId = chat.id;
-//         break;
-//       }
-//     }
-
-//     // 3) crear chat si no existe
-//     if (!chatId) {
-//       const { data: newChat, error: createError } = await supabase
-//         .from("chats")
-//         .insert({ type: "dm", created_by: myUserId })
-//         .select("id")
-//         .maybeSingle();
-
-//       if (createError || !newChat) {
-//         console.error("Error creando chat");
-//         return;
-//       }
-
-//       chatId = newChat.id;
-
-//       await supabase.from("chat_members").insert([
-//         { chat_id: chatId, user_id: myUserId },
-//         { chat_id: chatId, user_id: peerUserId },
-//       ]);
-//     }
-
-//     // 4) navegar
-//     router.push(`/chatDetail/${chatId}`);
-//   },
-//   [router]
-// );
-
 // ---- Header del perfil (se usa como ListHeaderComponent) ----
 function ProfileHeader({
   userRow,
@@ -161,8 +92,10 @@ function ProfileHeader({
   pets,
   onPressFollow,
   onPressMessage,
+  isFollowing,
+  togglingFollow,
+  isMyProfile, // ✅ nuevo
 }) {
-  const router = useRouter();
   const banner = userRow?.banner_pic;
 
   return (
@@ -176,7 +109,6 @@ function ProfileHeader({
             resizeMode="cover"
           />
         ) : null}
-        {/* overlay sutil */}
         <View className="absolute w-full h-full bg-black/15" />
 
         {/* Métricas + avatar */}
@@ -186,10 +118,7 @@ function ProfileHeader({
           </View>
 
           <Image
-            source={{
-              uri:
-                profilePic || "https://randomuser.me/api/portraits/men/32.jpg",
-            }}
+            source={{ uri: profilePic || FALLBACK_PROFILE }}
             className="w-28 h-28 rounded-full border-4 border-white"
             style={{
               shadowColor: "#000",
@@ -206,7 +135,7 @@ function ProfileHeader({
         </View>
       </View>
 
-      {/* Nombre + Bio + Acciones */}
+      {/* Nombre + Bio */}
       <View className="mt-14 mx-4 items-center">
         <Text
           className="text-2xl font-semibold text-gray-800"
@@ -222,36 +151,36 @@ function ProfileHeader({
         </Text>
       </View>
 
-      <View className="mt-3 flex-row justify-center items-center gap-x-3">
-        <Pressable
-          onPress={onPressFollow}
-          className="py-[8px] px-7 bg-[#FE9B5C] rounded-full my-2"
-        >
-          <Text className="text-white text-base font-semibold">Seguir</Text>
-        </Pressable>
-        <Pressable
-          onPress={onPressMessage}
-          // onPress={() =>
-          //   router.push({
-          //     pathname: "chatDetail/[id]",
-          //     params: {
-          //       // userId: item?.chatId,
-          //       userId: "24c01bd9-d47d-4984-ada5-ecd80442a904",
-          //     },
-          //   })
-          // }
-          className="p-[8px] bg-white rounded-2xl my-2"
-          style={{
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 6,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-          }}
-        >
-          <MessageIcon color="#FE9B5C" size={19} />
-        </Pressable>
-      </View>
+      {/* ✅ Acciones: ocultar si es mi perfil */}
+      {!isMyProfile ? (
+        <View className="mt-3 flex-row justify-center items-center gap-x-3">
+          <Pressable
+            onPress={onPressFollow}
+            disabled={togglingFollow}
+            className={`py-[8px] px-7 rounded-full my-2 ${
+              isFollowing ? "bg-gray-500" : "bg-[#FE9B5C]"
+            }`}
+          >
+            <Text className="text-white text-base font-semibold">
+              {togglingFollow ? "..." : isFollowing ? "Siguiendo" : "Seguir"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onPressMessage}
+            className="p-[8px] bg-white rounded-2xl my-2"
+            style={{
+              shadowColor: "#000",
+              shadowOpacity: 0.12,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 2,
+            }}
+          >
+            <MessageIcon color="#FE9B5C" size={19} />
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Sección Mascotas */}
       <View className="flex-row items-center justify-between px-4 mt-2 mb-1">
@@ -287,34 +216,182 @@ function ProfileHeader({
 export default function Profile() {
   const router = useRouter();
 
-  // 👇 id viene por parámetro de la ruta: pathname "indexScreens/profile/[id]"
-  //    tú envías { params: { index: owner.id } }, así que leemos "index"
   const { index } = useLocalSearchParams();
   const routeUserId = Array.isArray(index) ? index[0] : index;
 
   const { isLoaded, isSignedIn, user } = useUser();
 
+  // follow
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [togglingFollow, setTogglingFollow] = useState(false);
+
+  // estado data
+  const [userRow, setUserRow] = useState(null);
+  const [pets, setPets] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [profilePic, setProfilePic] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ✅ mi user.id interno cacheado
+  const [myInternalId, setMyInternalId] = useState(null);
+
+  const isMyProfile =
+    myInternalId && routeUserId && String(myInternalId) === String(routeUserId);
+
+  // helper: obtener mi user.id interno
+  const getMyInternalUserId = useCallback(async () => {
+    if (!isLoaded || !isSignedIn || !user?.id) return null;
+
+    const { data, error } = await supabase
+      .from("user")
+      .select("id")
+      .eq("clerk_id", user.id)
+      .maybeSingle();
+
+    if (error || !data?.id) {
+      console.error("No se pudo obtener mi user.id interno:", error?.message);
+      return null;
+    }
+
+    return String(data.id);
+  }, [isLoaded, isSignedIn, user?.id]);
+
+  // cargar si ya lo sigo
+  const fetchFollowState = useCallback(async () => {
+    if (!routeUserId) return;
+
+    const myId = myInternalId ?? (await getMyInternalUserId());
+    if (!myId) return;
+
+    // no auto-follow
+    if (String(myId) === String(routeUserId)) {
+      setIsFollowing(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("user_follows")
+      .select("follower_id")
+      .eq("follower_id", myId)
+      .eq("following_id", String(routeUserId))
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error fetchFollowState:", error.message);
+      return;
+    }
+
+    setIsFollowing(!!data);
+  }, [routeUserId, myInternalId, getMyInternalUserId]);
+
+  // toggle follow/unfollow
+  const toggleFollow = useCallback(async () => {
+    if (!routeUserId) return;
+
+    const myId = myInternalId ?? (await getMyInternalUserId());
+    if (!myId) return;
+
+    const targetId = String(routeUserId);
+
+    // no auto-follow
+    if (String(myId) === String(targetId)) return;
+
+    if (togglingFollow) return;
+    setTogglingFollow(true);
+
+    try {
+      const { data: existing, error: exErr } = await supabase
+        .from("user_follows")
+        .select("follower_id")
+        .eq("follower_id", myId)
+        .eq("following_id", targetId)
+        .maybeSingle();
+
+      if (exErr) {
+        console.error("Error check follow:", exErr.message);
+        return;
+      }
+
+      const already = !!existing;
+
+      if (already) {
+        // UNFOLLOW
+        const { error: delErr } = await supabase
+          .from("user_follows")
+          .delete()
+          .eq("follower_id", myId)
+          .eq("following_id", targetId);
+
+        if (delErr) {
+          console.error("Error unfollow:", delErr.message);
+          return;
+        }
+
+        const newFollowers = Math.max(0, (userRow?.followers ?? 0) - 1);
+
+        const { error: updErr } = await supabase
+          .from("user")
+          .update({ followers: newFollowers })
+          .eq("id", targetId);
+
+        if (updErr) {
+          console.error("Error update followers:", updErr.message);
+          return;
+        }
+
+        setIsFollowing(false);
+        setUserRow((prev) => ({ ...prev, followers: newFollowers }));
+      } else {
+        // FOLLOW
+        const { error: insErr } = await supabase
+          .from("user_follows")
+          .insert([{ follower_id: myId, following_id: targetId }]);
+
+        if (insErr) {
+          console.error("Error follow:", insErr.message);
+          return;
+        }
+
+        const newFollowers = (userRow?.followers ?? 0) + 1;
+
+        const { error: updErr } = await supabase
+          .from("user")
+          .update({ followers: newFollowers })
+          .eq("id", targetId);
+
+        if (updErr) {
+          console.error("Error update followers:", updErr.message);
+          return;
+        }
+
+        setIsFollowing(true);
+        setUserRow((prev) => ({ ...prev, followers: newFollowers }));
+      }
+    } finally {
+      setTogglingFollow(false);
+    }
+  }, [
+    routeUserId,
+    myInternalId,
+    getMyInternalUserId,
+    togglingFollow,
+    userRow?.followers,
+  ]);
+
+  // DM chat
   const openDmChat = useCallback(async () => {
     try {
       if (!isLoaded || !isSignedIn || !user?.id) return;
       if (!routeUserId) return;
 
-      // 1) myUserId (tabla user) por clerk_id
-      const { data: me, error: meError } = await supabase
-        .from("user")
-        .select("id")
-        .eq("clerk_id", user.id)
-        .maybeSingle();
+      const myId = myInternalId ?? (await getMyInternalUserId());
+      if (!myId) return;
 
-      if (meError || !me?.id) {
-        console.error("No se pudo obtener usuario actual:", meError?.message);
-        return;
-      }
+      // ✅ no DM contigo mismo
+      if (String(myId) === String(routeUserId)) return;
 
-      const myUserId = me.id;
-      const peerUserId = String(routeUserId);
-
-      // 2) Buscar chat DM existente entre ambos (forma simple)
+      // 1) Buscar chat DM existente entre ambos
       const { data: dmChats, error: dmError } = await supabase
         .from("chats")
         .select("id, chat_members(user_id)")
@@ -326,23 +403,22 @@ export default function Profile() {
       }
 
       let chatId = null;
-
       for (const chat of dmChats || []) {
         const members = (chat.chat_members || []).map((m) => String(m.user_id));
         if (
-          members.includes(String(myUserId)) &&
-          members.includes(peerUserId)
+          members.includes(String(myId)) &&
+          members.includes(String(routeUserId))
         ) {
           chatId = chat.id;
           break;
         }
       }
 
-      // 3) Crear si no existe
+      // 2) Crear si no existe
       if (!chatId) {
         const { data: newChat, error: createError } = await supabase
           .from("chats")
-          .insert({ type: "dm", created_by: myUserId })
+          .insert({ type: "dm", created_by: myId })
           .select("id")
           .maybeSingle();
 
@@ -356,8 +432,8 @@ export default function Profile() {
         const { error: membersError } = await supabase
           .from("chat_members")
           .insert([
-            { chat_id: chatId, user_id: myUserId, role: "owner" },
-            { chat_id: chatId, user_id: peerUserId, role: "member" },
+            { chat_id: chatId, user_id: myId, role: "owner" },
+            { chat_id: chatId, user_id: String(routeUserId), role: "member" },
           ]);
 
         if (membersError) {
@@ -366,32 +442,33 @@ export default function Profile() {
         }
       }
 
-      // 4) Navegar (IMPORTANTE: usa el nombre de param que te funciona, NO "id")
       router.push({
         pathname: "chatDetail/[id]",
-        params: { userId: String(chatId) }, // ✅ aquí va el chatId pero el param se llama "userId"
+        params: { userId: String(chatId) },
       });
     } catch (e) {
       console.error("openDmChat error:", e);
     }
-  }, [isLoaded, isSignedIn, user?.id, routeUserId, router]);
+  }, [
+    isLoaded,
+    isSignedIn,
+    user?.id,
+    routeUserId,
+    router,
+    myInternalId,
+    getMyInternalUserId,
+  ]);
 
-  // estado
-  const [userRow, setUserRow] = useState(null);
-  const [pets, setPets] = useState([]);
-  const [posts, setPosts] = useState([]);
-  const [profilePic, setProfilePic] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // --- fetchers (por id recibido en params) ---
+  // fetchers
   const fetchUserById = useCallback(async () => {
     if (!routeUserId) return;
+
     const { data, error } = await supabase
       .from("user")
       .select("*")
       .eq("id", String(routeUserId))
       .single();
+
     if (!error) {
       setUserRow(data);
       setProfilePic(data?.profile_pic ?? null);
@@ -400,33 +477,54 @@ export default function Profile() {
 
   const fetchPets = useCallback(async () => {
     if (!routeUserId) return;
+
     const { data, error } = await supabase
       .from("pet")
       .select("*, media_pet(*)")
       .eq("user_id", String(routeUserId))
       .order("created_at", { ascending: false });
+
     if (!error) setPets(data || []);
   }, [routeUserId]);
 
   const fetchPosts = useCallback(async () => {
     if (!routeUserId) return;
+
     const { data, error } = await supabase
       .from("post")
       .select("*, media_post(*)")
       .eq("user_id", String(routeUserId))
       .order("created_at", { ascending: false });
+
     if (!error) setPosts(data || []);
   }, [routeUserId]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
+      const myId = await getMyInternalUserId();
+      setMyInternalId(myId);
+
       await fetchUserById();
       await Promise.all([fetchPets(), fetchPosts()]);
+
+      // ✅ solo consultar follow si no es mi perfil
+      if (myId && String(myId) !== String(routeUserId)) {
+        await fetchFollowState();
+      } else {
+        setIsFollowing(false);
+      }
     } finally {
       setLoading(false);
     }
-  }, [fetchUserById, fetchPets, fetchPosts]);
+  }, [
+    getMyInternalUserId,
+    fetchUserById,
+    fetchPets,
+    fetchPosts,
+    fetchFollowState,
+    routeUserId,
+  ]);
 
   useEffect(() => {
     loadAll();
@@ -435,14 +533,31 @@ export default function Profile() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      const myId = myInternalId ?? (await getMyInternalUserId());
+      if (!myInternalId) setMyInternalId(myId);
+
       await fetchUserById();
       await Promise.all([fetchPets(), fetchPosts()]);
+
+      if (myId && String(myId) !== String(routeUserId)) {
+        await fetchFollowState();
+      } else {
+        setIsFollowing(false);
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [fetchUserById, fetchPets, fetchPosts]);
+  }, [
+    myInternalId,
+    getMyInternalUserId,
+    fetchUserById,
+    fetchPets,
+    fetchPosts,
+    fetchFollowState,
+    routeUserId,
+  ]);
 
-  // --- perf helpers para grid ---
+  // perf helpers
   const keyExtractor = useCallback((item) => String(item.id), []);
   const getItemLayout = useCallback((_data, index) => {
     const row = Math.floor(index / 3);
@@ -450,36 +565,29 @@ export default function Profile() {
     return { length, offset: row * length, index };
   }, []);
 
-  // --- Header render ---
-  // const renderHeader = useCallback(() => {
-  //   return (
-  //     <ProfileHeader
-  //       userRow={userRow}
-  //       profilePic={profilePic}
-  //       pets={pets}
-  //       onPressFollow={() =>
-  //         alert(`Seguiste a ${userRow?.username || "este usuario"}`)
-  //       }
-  //       onPressMessage={() =>
-  //         alert(`Escribirle a ${userRow?.username || "este usuario"}`)
-  //       }
-  //     />
-  //   );
-  // }, [userRow, profilePic, pets]);
-
   const renderHeader = useCallback(() => {
     return (
       <ProfileHeader
         userRow={userRow}
         profilePic={profilePic}
         pets={pets}
-        onPressFollow={() =>
-          alert(`Seguiste a ${userRow?.username || "este usuario"}`)
-        }
-        onPressMessage={openDmChat} // ✅ aquí
+        onPressFollow={toggleFollow}
+        onPressMessage={openDmChat}
+        isFollowing={isFollowing}
+        togglingFollow={togglingFollow}
+        isMyProfile={!!isMyProfile} // ✅ aquí
       />
     );
-  }, [userRow, profilePic, pets, openDmChat]);
+  }, [
+    userRow,
+    profilePic,
+    pets,
+    toggleFollow,
+    openDmChat,
+    isFollowing,
+    togglingFollow,
+    isMyProfile,
+  ]);
 
   if (loading) {
     return (
@@ -506,7 +614,6 @@ export default function Profile() {
         }}
       />
 
-      {/* Un solo FlatList: header (perfil + mascotas) + grid de posts */}
       <FlatList
         data={posts}
         keyExtractor={keyExtractor}
@@ -514,14 +621,12 @@ export default function Profile() {
         renderItem={({ item }) => <PostCell item={item} />}
         ListHeaderComponent={renderHeader}
         showsVerticalScrollIndicator={false}
-        // PERF
         getItemLayout={getItemLayout}
         initialNumToRender={18}
         maxToRenderPerBatch={18}
         windowSize={9}
         updateCellsBatchingPeriod={16}
         removeClippedSubviews
-        // REFRESH
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
