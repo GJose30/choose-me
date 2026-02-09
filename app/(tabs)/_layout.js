@@ -79,7 +79,7 @@ export default function TabsLayout() {
     useCallback(() => {
       fetchSupaUser();
       fetchNotifCount();
-    }, [fetchSupaUser, fetchNotifCount])
+    }, [fetchSupaUser, fetchNotifCount]),
   );
 
   // 3) Suscripción en tiempo real a notification
@@ -98,7 +98,7 @@ export default function TabsLayout() {
           table: "notification",
           filter: `user_id=eq.${supaUserId}`,
         },
-        () => fetchNotifCount()
+        () => fetchNotifCount(),
       )
       .subscribe();
 
@@ -143,7 +143,7 @@ export default function TabsLayout() {
   // ✅ uri final del tab profile
   const profileTabUri = useMemo(
     () => profilePic || FALLBACK_PROFILE_PIC,
-    [profilePic]
+    [profilePic],
   );
 
   return (

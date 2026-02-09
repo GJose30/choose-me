@@ -44,13 +44,16 @@ const AdoptionLikeCard = React.memo(function AdoptionLikeCard({
           <Text className="text-gray-500 text-xs">Sin foto</Text>
         </View>
       )}
+
       <View className="p-3">
         <Text className="text-lg font-semibold text-gray-700" numberOfLines={1}>
           {item.name}
         </Text>
+
         <Text className="text-sm text-gray-600" numberOfLines={1}>
           {item.age} años
         </Text>
+
         <Text className="text-sm text-gray-400" numberOfLines={1}>
           {item.location}
         </Text>
@@ -64,14 +67,11 @@ export default function AdoptionLikes() {
   const router = useRouter();
   const { width } = useWindowDimensions();
 
-  // Clerk (usuario autenticado)
   const { isLoaded, isSignedIn, user } = useUser();
 
-  // Usuario de tu app en Supabase (fila en tabla "user")
   const [supaUser, setSupaUser] = useState(null);
   const [userLoading, setUserLoading] = useState(false);
 
-  // layout estable
   const CARD_GAP = 24;
   const cardWidth = useMemo(() => Math.floor(width / 2) - CARD_GAP, [width]);
 
@@ -89,7 +89,7 @@ export default function AdoptionLikes() {
     return age < 0 || isNaN(age) ? "N/A" : age;
   }, []);
 
-  // 1) Traer el usuario de Supabase por clerk_id (igual que en Main)
+  // 1) Traer usuario interno por clerk_id
   const fetchSupaUser = useCallback(async () => {
     if (!isLoaded || !isSignedIn) return;
     setUserLoading(true);
@@ -114,7 +114,7 @@ export default function AdoptionLikes() {
     fetchSupaUser();
   }, [fetchSupaUser]);
 
-  // 2) Con el supaUser.id, traer los likes
+  // 2) Con supaUser.id, traer los likes + adoption_pet + pet(media)
   const fetchAdoptionPetLikes = useCallback(async () => {
     if (!supaUser?.id) return;
     setLoading(true);
@@ -124,11 +124,15 @@ export default function AdoptionLikes() {
       .from("adoption_likes_pet")
       .select(
         `
-        adoption_pet (
-          id, name, birthdate, location, description,
-          media_adoption_pet ( source, type )
+        adoption_pet:adoption_pet_id (
+          id, name, birthdate, location, description, pet_id,
+          pet:pet_id (
+            id,
+            name,
+            media_pet ( source )
+          )
         )
-      `
+      `,
       )
       .eq("user_id", supaUser.id);
 
@@ -138,31 +142,35 @@ export default function AdoptionLikes() {
       return;
     }
     if (id !== reqId.current) {
-      // llegó una respuesta vieja
       setLoading(false);
       return;
     }
 
-    // Map -> 1 tarjeta por mascota (dedup por seguridad)
+    // Map -> 1 tarjeta por adoption_pet (dedup por seguridad)
     const seen = new Set();
     const pets = [];
-    for (const like of data ?? []) {
-      const pet = like.adoption_pet;
-      const petId = String(pet?.id ?? "");
-      if (!petId || seen.has(petId)) continue;
-      seen.add(petId);
 
-      const image =
-        pet?.media_adoption_pet?.find((m) => m?.type === "image")?.source ||
-        pet?.media_adoption_pet?.[0]?.source ||
-        "";
+    for (const like of data ?? []) {
+      const ap = like.adoption_pet; // alias adoption_pet:adoption_pet_id
+      const apId = String(ap?.id ?? "");
+      if (!apId || seen.has(apId)) continue;
+      seen.add(apId);
+
+      // ✅ imagen desde pet -> media_pet
+      const image = ap?.pet?.media_pet?.[0]?.source || "";
+
+      // ✅ edad: birthdate de adoption_pet o fallback al pet
+      const birthdate = ap?.birthdate ?? ap?.pet?.birthdate ?? null;
+
+      // ✅ nombre: adoption_pet.name o fallback al pet.name
+      const name = ap?.name ?? ap?.pet?.name ?? "";
 
       pets.push({
-        id: petId,
-        name: pet?.name ?? "",
-        age: getAge(pet?.birthdate),
-        location: pet?.location ?? "",
-        description: pet?.description ?? "",
+        id: apId,
+        name,
+        age: getAge(birthdate),
+        location: ap?.location ?? "",
+        description: ap?.description ?? "",
         image,
       });
     }
@@ -192,7 +200,7 @@ export default function AdoptionLikes() {
         }
       />
     ),
-    [router, cardWidth]
+    [router, cardWidth],
   );
 
   if (!isLoaded || userLoading) {
@@ -230,13 +238,11 @@ export default function AdoptionLikes() {
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           numColumns={2}
-          // rendimiento
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={7}
           updateCellsBatchingPeriod={16}
           removeClippedSubviews
-          // padding y espacio
           contentContainerStyle={{ paddingBottom: 20 }}
           ListEmptyComponent={
             <View className="items-center justify-center py-16">

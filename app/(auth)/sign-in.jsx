@@ -15,24 +15,29 @@ export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const { signOut } = useClerk();
   const router = useRouter();
+
   const [identifier, setIdentifier] = useState(""); // username o email
   const [password, setPassword] = useState("");
   const [checked, setChecked] = useState(false);
 
   const onSignInPress = async () => {
     if (!isLoaded) return;
+
     try {
-      await signOut(); // Siempre intenta cerrar sesión previa (no falla si no había sesión)
+      // Limpia sesión previa si existía
+      await signOut();
     } catch (e) {}
+
     try {
       const result = await signIn.create({
-        identifier, // username o email
+        identifier,
         password,
       });
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        // Solo redirige, la lógica de Supabase va en la pantalla protegida
+
+        // ✅ IMPORTANTE: manda al "router guard"
         router.replace("/(tabs)");
       } else {
         Alert.alert("Atención", "Debes completar el proceso de login.");
@@ -40,60 +45,27 @@ export default function SignInScreen() {
     } catch (err) {
       Alert.alert(
         "Error",
-        err.errors?.[0]?.message || "Error al iniciar sesión"
+        err?.errors?.[0]?.message || "Error al iniciar sesión",
       );
     }
   };
 
   return (
-    // <View style={{ padding: 20 }}>
-    //   <Text style={{ fontSize: 24, marginBottom: 12 }}>Iniciar sesión</Text>
-    //   <TextInput
-    //     placeholder="Email o username"
-    //     autoCapitalize="none"
-    //     value={identifier}
-    //     onChangeText={setIdentifier}
-    //     style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
-    //   />
-    //   <TextInput
-    //     placeholder="Contraseña"
-    //     value={password}
-    //     secureTextEntry
-    //     onChangeText={setPassword}
-    //     style={{ borderWidth: 1, marginBottom: 12, padding: 8 }}
-    //   />
-    //   <TouchableOpacity onPress={onSignInPress}>
-    //     <Text>Iniciar sesión</Text>
-    //   </TouchableOpacity>
-    //   <View style={{ flexDirection: "row", marginTop: 8 }}>
-    //     <Link href="/sign-up">
-    //       <Text style={{ color: "blue" }}>Registrarse</Text>
-    //     </Link>
-    //   </View>
-    //   <View className="items-center justify-center h-full bg-white">
-    //     <Image
-    //       source={require("../../assets/FondoLogin.png")}
-    //       className="w-40 h-40 rounded-xl"
-    //       resizeMode="contain"
-    //     />
-    //   </View>
-    // </View>
-
     <View className="flex-1 bg-white">
-      {/* Imagen de fondo */}
+      {/* Fondo */}
       <Image
         source={require("../../assets/FondoLogin.png")}
         className="absolute top-0 left-0 w-full h-64"
         resizeMode="cover"
       />
 
+      {/* Logo */}
       <Image
         source={require("../../assets/Logo.png")}
         className="absolute top-12 left-1/2 -translate-x-1/2 w-40 h-36"
         resizeMode="cover"
       />
 
-      {/* Contenido encima del fondo */}
       <View className="flex-1 p-5 pt-64">
         <View className="items-center justify-center">
           <Text className="text-4xl font-semibold mb-1 text-gray-600">
@@ -104,6 +76,7 @@ export default function SignInScreen() {
           </Text>
         </View>
 
+        {/* Email/Username */}
         <View className="flex-row items-center border border-gray-300 mb-3 p-2 rounded gap-2">
           <Mail color="black" size={20} />
           <TextInput
@@ -115,6 +88,7 @@ export default function SignInScreen() {
           />
         </View>
 
+        {/* Password */}
         <View className="flex-row items-center border border-gray-300 mb-3 p-2 rounded gap-2">
           <EyeSlash color="black" size={20} />
           <TextInput
@@ -126,9 +100,9 @@ export default function SignInScreen() {
           />
         </View>
 
+        {/* Remember + Forgot */}
         <View className="flex-row items-center my-4">
           <TouchableOpacity onPress={() => setChecked(!checked)}>
-            {/* Cuadro del checkbox */}
             <View
               className={`w-5 h-5 border-2 rounded mr-2 ${
                 checked
@@ -138,16 +112,21 @@ export default function SignInScreen() {
             >
               {checked && <Text className="text-white text-xs">✓</Text>}
             </View>
-
-            {/* Texto */}
           </TouchableOpacity>
+
           <Text className="text-base text-gray-700">Recordarme</Text>
 
-          <Text className="text-base text-red-500 ml-auto">
-            Forget password?
-          </Text>
+          <TouchableOpacity
+            onPress={() =>
+              Alert.alert("Info", "Aquí puedes implementar 'Forgot password'.")
+            }
+            className="ml-auto"
+          >
+            <Text className="text-base text-red-500">Forget password?</Text>
+          </TouchableOpacity>
         </View>
 
+        {/* Socials */}
         <View className="flex-row items-center justify-center my-4 gap-4">
           <View className="h-1 w-20 bg-gray-400 my-4" />
           <Text className="text-base text-gray-700">or sign in with</Text>
@@ -169,6 +148,7 @@ export default function SignInScreen() {
           />
         </View>
 
+        {/* Bottom */}
         <View className="absolute bottom-20 left-0 right-0 p-5 bg-white">
           <TouchableOpacity
             className="bg-[#FE9B5C] p-3 rounded-2xl items-center"

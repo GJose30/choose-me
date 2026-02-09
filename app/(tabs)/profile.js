@@ -82,7 +82,7 @@ const PetCard = memo(function PetCard({ item }) {
   );
 });
 
-// ---------- Header del perfil (MI PERFIL) ----------
+// ---------- Header del perfil ----------
 function ProfileHeader({
   userRow,
   profilePic,
@@ -94,6 +94,8 @@ function ProfileHeader({
 }) {
   const router = useRouter();
   const banner = userRow?.banner_pic;
+
+  const isFoundation = userRow?.account_type === "FOUNDATION";
 
   const TabButton = ({ label, isActive, onPress }) => (
     <Pressable
@@ -152,7 +154,7 @@ function ProfileHeader({
         </View>
       </View>
 
-      {/* Nombre + Bio */}
+      {/* Nombre + badge */}
       <View className="mt-14 mx-4 items-center">
         <Text
           className="text-2xl font-semibold text-gray-800"
@@ -160,18 +162,57 @@ function ProfileHeader({
         >
           {userRow?.username || "Usuario"}
         </Text>
+
+        {/* ✅ Badge por tipo */}
+        <View className="mt-2 px-3 py-1 rounded-full bg-gray-100">
+          <Text className="text-xs font-semibold text-gray-600">
+            {isFoundation ? "Fundación" : "Persona"}
+          </Text>
+        </View>
       </View>
 
+      {/* Bio */}
       <View className="px-6 items-center mt-2">
         <Text className="text-sm text-gray-700 text-center">
           {userRow?.bio || "Este usuario aún no ha escrito una biografía."}
         </Text>
       </View>
 
+      {/* ✅ Acciones extra para fundación */}
+      {isFoundation ? (
+        <View className="flex-row gap-2 px-4 mt-4">
+          <Pressable
+            className="flex-1 py-3 bg-[#FE9B5C] rounded-full items-center"
+            onPress={() => router.push({ pathname: "adoption/create" })}
+          >
+            <Text className="text-white font-semibold">Publicar adopción</Text>
+          </Pressable>
+
+          <Pressable
+            className="flex-1 py-3 bg-gray-100 rounded-full items-center"
+            onPress={() => router.push({ pathname: "adoption/requests" })}
+          >
+            <Text className="text-gray-700 font-semibold">Solicitudes</Text>
+          </Pressable>
+        </View>
+      ) : (
+        // Persona: botón opcional (si quieres dejarlo vacío, bórralo)
+        <View className="px-4 mt-4">
+          <Pressable
+            className="py-3 bg-gray-100 rounded-full items-center"
+            onPress={() => router.push({ pathname: "adoption/create" })}
+          >
+            <Text className="text-gray-700 font-semibold">
+              Publicar mascota en adopción
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Sección Mascotas + Crear Mascota */}
-      <View className="flex-row items-center justify-between px-4 mt-3 mb-1">
+      <View className="flex-row items-center justify-between px-4 mt-4 mb-1">
         <Text className="text-lg font-semibold text-gray-700">
-          Mis Mascotas
+          {isFoundation ? "Mascotas en adopción" : "Mis Mascotas"}
         </Text>
 
         <Pressable
@@ -179,7 +220,7 @@ function ProfileHeader({
           onPress={() => router.push({ pathname: "createPet/createPet" })}
         >
           <Text className="text-white text-sm font-semibold">
-            Crear Mascota
+            {isFoundation ? "Añadir Mascota" : "Crear Mascota"}
           </Text>
         </Pressable>
       </View>
@@ -196,6 +237,15 @@ function ProfileHeader({
           paddingBottom: 14,
           gap: 12,
         }}
+        ListEmptyComponent={
+          <View className="px-4 py-6">
+            <Text className="text-gray-500">
+              {isFoundation
+                ? "Aún no has agregado mascotas para adopción."
+                : "Aún no has agregado mascotas."}
+            </Text>
+          </View>
+        }
       />
 
       {/* Título + Tabs */}
@@ -204,7 +254,6 @@ function ProfileHeader({
           {activeTab === "posts" ? "Mis Publicaciones" : "Guardados"}
         </Text>
 
-        {/* Tabs (botón de guardados agregado) */}
         <View className="flex-row gap-2 mt-3 bg-white">
           <TabButton
             label={`Publicaciones (${postsCount})`}
@@ -218,6 +267,18 @@ function ProfileHeader({
           />
         </View>
       </View>
+
+      {/* ✅ Nota/Info extra para fundación */}
+      {isFoundation ? (
+        <View className="px-4 pb-2">
+          <View className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+            <Text className="text-sm text-gray-700">
+              Consejo: Mantén tu perfil actualizado para generar más confianza
+              al recibir solicitudes de adopción.
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -233,11 +294,9 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ✅ NUEVO (sin tocar tus variables existentes)
   const [bookmarkedPosts, setBookmarkedPosts] = useState([]);
-  const [activeTab, setActiveTab] = useState("posts"); // por defecto igual que hoy
+  const [activeTab, setActiveTab] = useState("posts");
 
-  // 1) Traer mi fila interna (tabla user) usando clerk_id
   const fetchUser = useCallback(async () => {
     if (!isLoaded || !isSignedIn || !user?.id) return;
 
@@ -259,6 +318,8 @@ export default function Profile() {
   const fetchPets = useCallback(async () => {
     if (!userRow?.id) return;
 
+    // ✅ Por ahora, fundación y persona comparten el mismo esquema (pets por user_id)
+    // Si luego haces "foundation_id", aquí se ajusta el filtro.
     const { data, error } = await supabase
       .from("pet")
       .select("*, media_pet(*)")
@@ -290,7 +351,6 @@ export default function Profile() {
     setPosts(data || []);
   }, [userRow?.id]);
 
-  // ✅ NUEVO: Traer guardados desde post_bookmarks
   const fetchBookmarks = useCallback(async () => {
     if (!userRow?.id) return;
 
@@ -304,7 +364,7 @@ export default function Profile() {
           *,
           media_post(*)
         )
-      `
+      `,
       )
       .eq("user_id", userRow.id)
       .order("created_at", { ascending: false });
@@ -315,7 +375,6 @@ export default function Profile() {
     }
 
     const onlyPosts = (data || []).map((row) => row.post).filter(Boolean);
-
     setBookmarkedPosts(onlyPosts);
   }, [userRow?.id]);
 
@@ -413,10 +472,6 @@ export default function Profile() {
             tintColor="#FE9B5C"
           />
         }
-        // contentContainerStyle={{ paddingBottom: 24 }}
-        // style={{ flex: 1, width: "100%" }} // <-- IMPORTANTE
-        // contentContainerStyle={{ paddingBottom: 24, width: "100%" }} // <-- IMPORTANTE
-        // columnWrapperStyle={{ width: "100%" }} // <-- IMPORTANTE
         ListEmptyComponent={
           <View className="items-center justify-center py-16">
             <Text className="text-gray-500">

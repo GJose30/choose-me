@@ -4,9 +4,10 @@ import {
   ActivityIndicator,
   View,
   DeviceEventEmitter,
+  Text,
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Screen } from "./Screen";
 import { PostItem } from "./Index/PostItem";
 import { supabase } from "../lib/supabase";
@@ -52,14 +53,12 @@ export function Main() {
         media_post(*),
         post_likes!left ( user_id ),
         post_bookmarks!left ( user_id )
-      `
+      `,
       )
       .order("created_at", { ascending: false })
       .limit(PAGE_SIZE);
 
-    if (cursor) {
-      query = query.lt("created_at", cursor);
-    }
+    if (cursor) query = query.lt("created_at", cursor);
 
     const { data, error } = await query;
     if (error) {
@@ -103,8 +102,7 @@ export function Main() {
     if (newPosts.length > 0) {
       setPosts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
-        const merged = [...prev, ...newPosts.filter((p) => !seen.has(p.id))];
-        return merged;
+        return [...prev, ...newPosts.filter((p) => !seen.has(p.id))];
       });
 
       cursorRef.current =
@@ -138,15 +136,11 @@ export function Main() {
   }, [fetchUser]);
 
   useEffect(() => {
-    if (supaUser?.id) {
-      initialLoad();
-    }
+    if (supaUser?.id) initialLoad();
   }, [supaUser?.id, initialLoad]);
 
   useEffect(() => {
-    if (isFocused && supaUser?.id) {
-      initialLoad();
-    }
+    if (isFocused && supaUser?.id) initialLoad();
   }, [isFocused, supaUser?.id, initialLoad]);
 
   // Escuchar cambios emitidos desde otras pantallas (likes / bookmarks)
@@ -162,10 +156,10 @@ export function Main() {
                   likes: Math.max(0, (p.likes ?? 0) + delta),
                   likedByMe: liked,
                 }
-              : p
-          )
+              : p,
+          ),
         );
-      }
+      },
     );
 
     const bmSub = DeviceEventEmitter.addListener(
@@ -175,10 +169,10 @@ export function Main() {
           prev.map((p) =>
             String(p.id) === String(postId)
               ? { ...p, bookmarkedByMe: bookmarked }
-              : p
-          )
+              : p,
+          ),
         );
-      }
+      },
     );
 
     return () => {
@@ -222,50 +216,90 @@ export function Main() {
         bookmarkedInitial={item.bookmarkedByMe}
       />
     ),
-    [onHidePost, onReportPost, supaUser?.id]
+    [onHidePost, onReportPost, supaUser?.id],
   );
 
   const ListFooter = useCallback(
     () =>
       loading ? (
-        <View className="py-4">
+        <View className="py-4 bg-white">
           <ActivityIndicator size="small" />
         </View>
       ) : null,
-    [loading]
+    [loading],
   );
+
+  // ---------- EMPTY STATE (full screen) ----------
+  const EmptyState = useCallback(() => {
+    if (userLoading || loading) {
+      return (
+        <View className="flex-1 bg-white items-center justify-center">
+          <ActivityIndicator size="small" />
+        </View>
+      );
+    }
+
+    if (userError) {
+      return (
+        <View className="flex-1 bg-white items-center justify-center px-8">
+          <Text className="text-gray-900 font-semibold text-lg">
+            No se pudo cargar el feed
+          </Text>
+          <Text className="text-gray-500 text-center mt-2">
+            Desliza hacia abajo para intentar nuevamente.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View className="flex-1 bg-white items-center justify-center px-8">
+        <Text className="text-gray-900 font-semibold text-lg">
+          Estás al día ✨
+        </Text>
+        <Text className="text-gray-500 text-center mt-2">
+          No hay publicaciones nuevas por ahora. Desliza hacia abajo para
+          actualizar.
+        </Text>
+      </View>
+    );
+  }, [userLoading, loading, userError]);
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView className="flex-1">
-        <Screen>
-          <FlatList
-            data={posts}
-            keyExtractor={keyExtractor}
-            renderItem={renderItem}
-            extraData={posts}
-            showsVerticalScrollIndicator={false}
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            ListFooterComponent={ListFooter}
-            onEndReachedThreshold={0.5}
-            onMomentumScrollBegin={() => {
-              onEndReachedCalledDuringMomentum.current = false;
-            }}
-            onEndReached={() => {
-              if (!onEndReachedCalledDuringMomentum.current) {
-                loadMore();
-                onEndReachedCalledDuringMomentum.current = true;
-              }
-            }}
-            initialNumToRender={8}
-            maxToRenderPerBatch={8}
-            updateCellsBatchingPeriod={16}
-            windowSize={9}
-            removeClippedSubviews
-          />
-        </Screen>
-      </SafeAreaView>
+      {/* Fondo blanco garantizado por el wrapper */}
+      <Screen className="bg-white">
+        <FlatList
+          data={posts}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          extraData={posts}
+          showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          ListFooterComponent={ListFooter}
+          ListEmptyComponent={EmptyState}
+          onEndReachedThreshold={0.5}
+          contentContainerStyle={{
+            flexGrow: 1, // 👈 hace que ocupe toda la pantalla
+            backgroundColor: "#fff", // 👈 fondo blanco incluso vacío
+          }}
+          onMomentumScrollBegin={() => {
+            onEndReachedCalledDuringMomentum.current = false;
+          }}
+          onEndReached={() => {
+            if (!onEndReachedCalledDuringMomentum.current) {
+              loadMore();
+              onEndReachedCalledDuringMomentum.current = true;
+            }
+          }}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={16}
+          windowSize={9}
+          removeClippedSubviews
+        />
+      </Screen>
     </SafeAreaProvider>
   );
 }

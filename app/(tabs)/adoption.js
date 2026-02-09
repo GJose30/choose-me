@@ -13,6 +13,7 @@ import {
   ScrollView,
   RefreshControl,
   useWindowDimensions,
+  Alert,
 } from "react-native";
 import Swiper from "react-native-deck-swiper";
 import { supabase } from "../../lib/supabase";
@@ -20,6 +21,7 @@ import { Stack, useRouter } from "expo-router";
 import { Heart, Close, Paw, Info } from "../../components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useUser } from "@clerk/clerk-expo";
 
 /** ---------- Tarjeta de adopción (memo) ---------- */
 const AdoptionCard = React.memo(function AdoptionCard({
@@ -28,7 +30,9 @@ const AdoptionCard = React.memo(function AdoptionCard({
   onInfoPress,
   onOwnerPress,
 }) {
-  const cover = item?.media_adoption_pet?.[0]?.source;
+  // ✅ Imagen: pet -> media_pet(source)
+  const cover = item?.pet?.media_pet?.[0]?.source;
+
   const owner = item?.user;
   const ownerName = owner?.username || "Dueño desconocido";
   const ownerPic =
@@ -39,10 +43,12 @@ const AdoptionCard = React.memo(function AdoptionCard({
 
   const cardWidth = useMemo(() => Math.min(width * 0.92, 420), [width]);
   const cardHeight = useMemo(() => {
-    // clamp: min 460, max 640
     const h = Math.floor(height * 0.62);
     return Math.max(460, Math.min(h, 640));
   }, [height]);
+
+  const displayName = item?.name ?? item?.pet?.name ?? "";
+  const displayBirthdate = item?.birthdate ?? item?.pet?.birthdate ?? null;
 
   return (
     <View
@@ -54,7 +60,6 @@ const AdoptionCard = React.memo(function AdoptionCard({
         elevation: 10,
       }}
     >
-      {/* Imagen */}
       {!!cover ? (
         <Image
           source={{ uri: cover }}
@@ -67,7 +72,6 @@ const AdoptionCard = React.memo(function AdoptionCard({
         </View>
       )}
 
-      {/* Overlay gradient para legibilidad */}
       <View className="absolute left-0 right-0 bottom-0 top-0">
         <LinearGradient
           colors={["transparent", "rgba(0,0,0,0.18)", "rgba(0,0,0,0.72)"]}
@@ -75,7 +79,6 @@ const AdoptionCard = React.memo(function AdoptionCard({
         />
       </View>
 
-      {/* Top bar: location + info */}
       <View className="absolute top-3 left-3 right-3 flex-row items-center justify-between">
         {!!item?.location ? (
           <View
@@ -108,29 +111,26 @@ const AdoptionCard = React.memo(function AdoptionCard({
         </Pressable>
       </View>
 
-      {/* Bottom content */}
       <View className="absolute left-0 right-0 bottom-0 px-4 pb-4">
         <View className="flex-row items-end justify-between">
-          {/* Nombre + edad */}
           <View className="flex-1 pr-3">
             <Text
               className="text-white text-3xl font-extrabold"
               numberOfLines={1}
             >
-              {item?.name ?? ""}
+              {displayName}
             </Text>
 
-            {!!item?.birthdate && (
+            {!!displayBirthdate && (
               <Text
                 className="text-white/90 text-base font-semibold"
                 numberOfLines={1}
               >
-                {getAge(item.birthdate)} años
+                {getAge(displayBirthdate)} años
               </Text>
             )}
           </View>
 
-          {/* Likes chip */}
           <View className="bg-white/22 px-3 py-2 rounded-full border border-white/20">
             <Text className="text-white font-bold">
               {(item?.likes ?? 0) + " Likes"}
@@ -138,7 +138,6 @@ const AdoptionCard = React.memo(function AdoptionCard({
           </View>
         </View>
 
-        {/* Dueño */}
         <Pressable
           className="mt-4 flex-row items-center"
           onPress={() => owner?.id && onOwnerPress?.(owner.id)}
@@ -173,6 +172,9 @@ const AdoptionCard = React.memo(function AdoptionCard({
 
 export default function Adoption() {
   const router = useRouter();
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  const [userRow, setUserRow] = useState(null);
 
   const [adoptionPet, setAdoptionPet] = useState([]);
   const [index, setIndex] = useState(0);
@@ -188,19 +190,18 @@ export default function Adoption() {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
 
-  // Altura del dock inferior (botonera)
+  const isLikingRef = useRef(false);
+
   const footerHeight = useMemo(() => {
     const base = height < 750 ? 104 : 120;
     return base + insets.bottom;
   }, [height, insets.bottom]);
 
-  // Altura del swiper para que no choque con el dock
   const swiperHeight = useMemo(() => {
-    const h = height - footerHeight - 140; // 140 ≈ título + márgenes
+    const h = height - footerHeight - 140;
     return Math.max(460, Math.min(h, 700));
   }, [height, footerHeight]);
 
-  // Edad
   const getAge = useCallback((birthDate) => {
     const today = new Date();
     const birth = new Date(birthDate);
@@ -210,25 +211,95 @@ export default function Adoption() {
     return age;
   }, []);
 
-  // Fetch con dueño incluido
+  // ✅ Traer tu userRow interno (tabla user) por clerk_id
+  const fetchUserRow = useCallback(async () => {
+    if (!isLoaded || !isSignedIn || !user?.id) return;
+
+    const { data, error } = await supabase
+      .from("user")
+      .select("id, username")
+      .eq("clerk_id", user.id)
+      .single();
+
+    if (error) {
+      console.error("fetchUserRow:", error.message);
+      return;
+    }
+
+    setUserRow(data);
+  }, [isLoaded, isSignedIn, user?.id]);
+
+  // ✅ Like: crea registro en adoption_likes_pet
+  const likeAdoptionPet = useCallback(
+    async (adoptionPetId) => {
+      if (!isLoaded || !isSignedIn) {
+        Alert.alert("Atención", "Debes iniciar sesión para dar like.");
+        return;
+      }
+      if (!userRow?.id) return;
+      if (!adoptionPetId) return;
+
+      // Evita doble tap / doble swipe rápido
+      if (isLikingRef.current) return;
+      isLikingRef.current = true;
+
+      // Recomendado: tener UNIQUE(user_id, adoption_pet_id) y hacer upsert.
+      // Si no tienes el UNIQUE, esto insertará duplicados.
+      const payload = {
+        user_id: userRow.id,
+        adoption_pet_id: adoptionPetId,
+        // created_at lo pone la DB
+      };
+
+      const { error } = await supabase
+        .from("adoption_likes_pet")
+        .upsert(payload, { onConflict: "user_id,adoption_pet_id" });
+
+      if (error) {
+        console.error("likeAdoptionPet:", error.message);
+        // Si no existe el UNIQUE, te dará error de onConflict o no funcionará como esperas.
+      } else {
+        // (Opcional) feedback rápido
+        // setSwipeMessage("Guardado ❤️");
+      }
+
+      isLikingRef.current = false;
+    },
+    [isLoaded, isSignedIn, userRow?.id],
+  );
+
+  // ✅ Fetch adoption_pet con pet->media_pet y user
   const fetchAdoptionPet = useCallback(async () => {
     const { data, error } = await supabase
       .from("adoption_pet")
       .select(
         `
-        id, name, birthdate, location, likes, user_id,
-        media_adoption_pet ( source ),
+        id, name, birthdate, location, likes, user_id, pet_id,
+        pet:pet_id (
+          id,
+          name,
+          media_pet ( source )
+        ),
         user: user_id ( id, username, profile_pic )
-      `
+      `,
       )
       .order("created_at", { ascending: false });
 
-    if (!error) setAdoptionPet(data ?? []);
+    if (error) {
+      console.error("fetchAdoptionPet error:", error.message);
+      return;
+    }
+
+    setAdoptionPet(data ?? []);
   }, []);
 
   useEffect(() => {
     fetchAdoptionPet();
   }, [fetchAdoptionPet]);
+
+  useEffect(() => {
+    fetchUserRow();
+  }, [fetchUserRow]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -241,7 +312,6 @@ export default function Adoption() {
     }
   }, [fetchAdoptionPet]);
 
-  // Señal “Lo quiero / No me interesa”
   const handleSwiping = useCallback((x) => {
     const next = x < -50 ? "No me interesa" : x > 50 ? "¡Lo quiero!" : "";
     if (swipeMessageRef.current !== next) {
@@ -272,10 +342,9 @@ export default function Adoption() {
         isManualSwipe.current = false;
       }, 700);
     },
-    [canSwipe]
+    [canSwipe],
   );
 
-  // Navegaciones
   const goToAdoptionProfile = useCallback(
     (adoptionId) => {
       if (!adoptionId) return;
@@ -284,7 +353,7 @@ export default function Adoption() {
         params: { adoption_pet_id: String(adoptionId) },
       });
     },
-    [router]
+    [router],
   );
 
   const goToOwnerProfile = useCallback(
@@ -295,29 +364,26 @@ export default function Adoption() {
         params: { index: String(ownerId) },
       });
     },
-    [router]
+    [router],
   );
 
   const swipeBgClass =
     swipeMessage === "¡Lo quiero!" ? "bg-emerald-400" : "bg-red-400";
 
-  // Solo para blobs (diseño): tamaños responsivos
   const blob1 = useMemo(() => Math.min(width * 0.85, 380), [width]);
   const blob2 = useMemo(() => Math.min(width * 0.75, 320), [width]);
   const blob3 = useMemo(() => Math.min(width * 0.65, 280), [width]);
 
   return (
     <View className="flex-1">
-      {/* Fondo original (no negro): gradient pastel + blobs */}
+      {/* Fondo */}
       <View className="absolute top-0 left-0 right-0 bottom-0">
-        {/* Base gradient “sunset” */}
         <LinearGradient
-          colors={["#FFF7ED", "#FFE4E6", "#DBEAFE"]} // durazno -> rosado -> celeste suave
+          colors={["#FFF7ED", "#FFE4E6", "#DBEAFE"]}
           locations={[0, 0.55, 1]}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         />
 
-        {/* Blob 1 */}
         <View
           style={{
             position: "absolute",
@@ -326,11 +392,9 @@ export default function Adoption() {
             width: blob1,
             height: blob1,
             borderRadius: blob1 / 2,
-            backgroundColor: "rgba(254,155,92,0.25)", // naranja suave
+            backgroundColor: "rgba(254,155,92,0.25)",
           }}
         />
-
-        {/* Blob 2 */}
         <View
           style={{
             position: "absolute",
@@ -339,11 +403,9 @@ export default function Adoption() {
             width: blob2,
             height: blob2,
             borderRadius: blob2 / 2,
-            backgroundColor: "rgba(96,165,250,0.22)", // azul suave
+            backgroundColor: "rgba(96,165,250,0.22)",
           }}
         />
-
-        {/* Blob 3 */}
         <View
           style={{
             position: "absolute",
@@ -352,24 +414,15 @@ export default function Adoption() {
             width: blob3,
             height: blob3,
             borderRadius: blob3 / 2,
-            backgroundColor: "rgba(250,204,21,0.20)", // amarillo suave
+            backgroundColor: "rgba(250,204,21,0.20)",
           }}
         />
-
-        {/* Velo para unificar y que el card resalte */}
         <LinearGradient
           colors={["rgba(255,255,255,0.0)", "rgba(255,255,255,0.35)"]}
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-          }}
+          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
         />
       </View>
 
-      {/* Header nativo */}
       <Stack.Screen
         options={{
           headerTitle: "",
@@ -378,7 +431,6 @@ export default function Adoption() {
         }}
       />
 
-      {/* Contenido */}
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: footerHeight + 12 }}
@@ -387,7 +439,7 @@ export default function Adoption() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Barra superior: título + heart */}
+        {/* Header */}
         <View className="mt-10 px-4 flex-row items-center justify-between">
           <View>
             <Text className="text-slate-800 text-3xl font-extrabold">
@@ -412,9 +464,7 @@ export default function Adoption() {
           </Pressable>
         </View>
 
-        {/* Wrapper de swiper y mensajes */}
         <View className="items-center">
-          {/* Mensaje flotante arriba del card */}
           {swipeMessage !== "" && (
             <View
               className={`mt-4 mb-3 px-5 py-2 rounded-2xl ${swipeBgClass}`}
@@ -432,7 +482,6 @@ export default function Adoption() {
             </View>
           )}
 
-          {/* Swiper (cards) */}
           {adoptionPet.length > 0 ? (
             <Swiper
               ref={(c) => (swiperRef.current = c)}
@@ -450,20 +499,17 @@ export default function Adoption() {
               stackSeparation={0}
               animateCardOpacity
               disableBottomSwipe
-              onSwiping={(x, y) => handleSwiping(x)}
-              onSwipedRight={() => {
-                if (isManualSwipe.current) return;
+              onSwiping={(x) => handleSwiping(x)}
+              // ✅ Aquí guardamos el like al swipar a la derecha
+              onSwipedRight={(cardIndex) => {
+                const item = adoptionPet?.[cardIndex];
+                if (item?.id) likeAdoptionPet(item.id);
                 setSwipeMessage("");
                 swipeMessageRef.current = "";
               }}
               onSwipedLeft={() => {
                 setSwipeMessage("");
                 swipeMessageRef.current = "";
-              }}
-              onSwipedTop={() => {
-                setSwipeMessage("");
-                swipeMessageRef.current = "";
-                alert("Me adoptaste");
               }}
               onSwiped={(i) => {
                 setSwipeMessage("");
@@ -488,7 +534,7 @@ export default function Adoption() {
         </View>
       </ScrollView>
 
-      {/* DOCK INFERIOR — fijo y NO se monta en el swiper */}
+      {/* DOCK INFERIOR */}
       <View
         className="absolute left-0 right-0"
         style={{
@@ -536,6 +582,7 @@ export default function Adoption() {
             <Paw size={height < 750 ? 38 : 42} color="white" />
           </Pressable>
 
+          {/* ✅ Este botón hace swipeRight, y swipeRight dispara onSwipedRight => like */}
           <Pressable
             className="rounded-full items-center justify-center"
             style={{

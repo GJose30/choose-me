@@ -252,7 +252,7 @@ export function PostItem({
           if (typeof newVal === "number") {
             setCommentsCount(newVal);
           }
-        }
+        },
       )
       .subscribe();
 
@@ -270,9 +270,9 @@ export function PostItem({
         setCommentsCount((prev) =>
           typeof newCount === "number"
             ? newCount
-            : Math.max(0, (prev ?? 0) + (delta ?? 0))
+            : Math.max(0, (prev ?? 0) + (delta ?? 0)),
         );
-      }
+      },
     );
     return () => sub.remove();
   }, [dataPost?.id]);
